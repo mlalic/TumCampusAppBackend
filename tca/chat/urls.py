@@ -9,6 +9,7 @@ from chat import views
 router = DefaultRouter()
 # Routes which should be found in the api root
 router.register(r'members', views.MemberViewSet)
+router.register(r'chat_rooms', views.ChatRoomViewSet)
 
 urlpatterns = patterns('',
     url(r'^', include(router.urls)),
