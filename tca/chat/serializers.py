@@ -12,6 +12,15 @@ class MemberSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class ChatRoomSerializer(serializers.HyperlinkedModelSerializer):
+    messages = serializers.SerializerMethodField('get_messages_url')
+
+    def get_messages_url(self, chat_room):
+        return reverse(
+            'message-list',
+            kwargs={'chat_room': chat_room.pk},
+            request=self.context.get('request', None)
+        )
+
     class Meta:
         model = ChatRoom
 
