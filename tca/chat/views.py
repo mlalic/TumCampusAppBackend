@@ -7,9 +7,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from chat.models import Member
+from chat.models import Message
 from chat.models import ChatRoom
 from chat.serializers import MemberSerializer
 from chat.serializers import ChatRoomSerializer
+from chat.serializers import MessageSerializer
 
 
 class MemberViewSet(viewsets.ModelViewSet):
@@ -34,3 +36,30 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         return Response({
             'status': 'success',
         })
+
+
+class ChatMessageViewSet(viewsets.ModelViewSet):
+    model = Message
+    chat_room_id_field = 'chat_room'
+    serializer_class = MessageSerializer
+
+    def _chat_room_instance(self):
+        """Returns the :class:`models.ChatRoom` instance that is the parent
+        of the chat message(s).
+        """
+        return ChatRoom.objects.get(pk=self.kwargs[self.chat_room_id_field])
+
+    def get_queryset(self):
+        """
+        Override the query set to get only the resources which are subordinate
+        to the given ChatRoom.
+        """
+        return self.model.objects.filter(
+            chat_room=self.kwargs[self.chat_room_id_field])
+
+    def pre_save(self, message):
+        """
+        Implement the hook method to inject the corresponding parent
+        ChatRoom instance to the newly created message.
+        """
+        message.chat_room = self._chat_room_instance()
