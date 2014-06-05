@@ -1,3 +1,11 @@
 from django.shortcuts import render
 
-# Create your views here.
+from rest_framework import viewsets
+
+from chat.models import Member
+from chat.serializers import MemberSerializer
+
+
+class MemberViewSet(viewsets.ModelViewSet):
+    model = Member
+    serializer_class = MemberSerializer
