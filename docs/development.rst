@@ -15,9 +15,9 @@ used on all major platforms and is based on an Ubuntu 13.04. base image.
 
 Follow these steps to set up your host:
 
-1. [Install Vagrant](https://docs.vagrantup.com/v2/installation/) for your
+1. `Install Vagrant <https://docs.vagrantup.com/v2/installation/>`_ for your
    operating system
-2. [Install VirtualBox](https://www.virtualbox.org/wiki/Downloads) for your
+2. `Install VirtualBox <https://www.virtualbox.org/wiki/Downloads>`_ for your
    operating system
 3. Download the base Vagrant box (one time download) by::
 
