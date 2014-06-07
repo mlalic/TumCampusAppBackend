@@ -12,6 +12,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Every Vagrant virtual environment requires a box to build off of.
   config.vm.box = "chef/ubuntu-13.04"
 
+  config.vm.provision :shell, :path => "scripts/bootstrap.sh"
+
   config.vm.provider "virtualbox" do |v|
       v.memory = 1024
       v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
