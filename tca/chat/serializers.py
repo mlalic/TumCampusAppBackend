@@ -4,11 +4,42 @@ from rest_framework.reverse import reverse
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
+from chat.models import PublicKey
 
 
 class MemberSerializer(serializers.HyperlinkedModelSerializer):
+    public_keys = serializers.SerializerMethodField('get_public_keys_url')
+
     class Meta:
         model = Member
+
+    def get_public_keys_url(self, member):
+        return reverse(
+            'publickey-list',
+            kwargs={'member': member.pk},
+            request=self.context.get('request', None))
+
+
+class PublicKeySerializer(serializers.HyperlinkedModelSerializer):
+    url = serializers.SerializerMethodField('get_url')
+
+    class Meta:
+        model = PublicKey
+        exclude = ('member',)
+
+    def get_url(self, public_key):
+        """Customized version of obtaining the object's URL.
+        Necessary because the resource is a subordinate of a chatroom
+        resource, so it is necessary to include the parent's ID in the
+        URL.
+        """
+        return reverse(
+            'publickey-detail', kwargs={
+                'member': public_key.member.pk,
+                'pk': public_key.pk,
+            },
+            request=self.context.get('request', None)
+        )
 
 
 class ChatRoomSerializer(serializers.HyperlinkedModelSerializer):

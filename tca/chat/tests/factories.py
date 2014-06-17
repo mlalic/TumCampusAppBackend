@@ -5,6 +5,7 @@ Module containing factory_boy factories for the models of the
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
+from chat.models import PublicKey
 
 import factory.fuzzy
 import factory
@@ -44,6 +45,21 @@ class MemberFactory(factory.DjangoModelFactory):
     lrz_id = factory.fuzzy.FuzzyText(length=7)
     first_name = factory.fuzzy.FuzzyText()
     last_name = factory.fuzzy.FuzzyText()
+
+
+class PublicKeyFactory(factory.DjangoModelFactory):
+    """
+    A factory of :class:`chat.models.PublicKey` objects.
+
+    By default it returns a completely random public key, with absolutely
+    no connection to a real RSA key pair.
+
+    The key is connected to a random existing member.
+    """
+    FACTORY_FOR = PublicKey
+
+    key_text = factory.fuzzy.FuzzyText(length=128)
+    member = FuzzyForeignKeyChoice(Member)
 
 
 class ChatRoomFactory(factory.DjangoModelFactory):

@@ -34,6 +34,12 @@ class PublicKey(models.Model):
             key=self.key_text_encoding,
             member=self.member)
 
+    def get_absolute_url(self):
+        return reverse('publickey-detail', kwargs={
+            'member': self.member.pk,
+            'pk': self.pk,
+        })
+
 
 @python_2_unicode_compatible
 class ChatRoom(models.Model):

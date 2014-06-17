@@ -3,15 +3,18 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets
 from rest_framework import status
+from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
+from chat.models import PublicKey
 from chat.serializers import MemberSerializer
 from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
+from chat.serializers import PublicKeySerializer
 
 
 class FilteredModelViewSetMixin(object):
@@ -48,6 +51,43 @@ class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = Member
     serializer_class = MemberSerializer
     filter_fields = ('lrz_id',)
+
+
+class PublicKeyViewSet(mixins.CreateModelMixin,
+                       mixins.ListModelMixin,
+                       mixins.RetrieveModelMixin,
+                       viewsets.GenericViewSet):
+    """
+    A ViewSet for representing the PublicKey resource.
+
+    It mixes in the django-rest-framework provided mixins to provide
+    only the functionality of creating, listing, and retrieving public
+    keys -- it disables deleting them.
+    """
+    model = PublicKey
+    serializer_class = PublicKeySerializer
+    member_id_field = 'member'
+
+    def _member_parent_instance(self):
+        """Returns the :class:`models.Member` instance that is the parent
+        of the Public Keys.
+        """
+        return Member.objects.get(pk=self.kwargs[self.member_id_field])
+
+    def get_queryset(self):
+        """
+        Override the query set to get only the resources which are subordinate
+        to the given Member.
+        """
+        return self.model.objects.filter(
+            member=self.kwargs[self.member_id_field])
+
+    def pre_save(self, public_key):
+        """
+        Implement the hook method to inject the corresponding parent
+        :class:`models.Member` instance to the newly created public key.
+        """
+        public_key.member = self._member_parent_instance()
 
 
 class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):

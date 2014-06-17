@@ -8,10 +8,12 @@ import json
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
+from chat.models import PublicKey
 
 from .factories import MemberFactory
 from .factories import MessageFactory
 from .factories import ChatRoomFactory
+from .factories import PublicKeyFactory
 
 
 class ViewTestCaseMixin(object):
@@ -342,3 +344,64 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(message_count, len(response_content))
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
+
+
+class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for the REST endpoint for a list of public keys: the endpoint
+    needs to be able to create a new public key and list all existing
+    public keys.
+    """
+
+    view_name = 'publickey-list'
+
+    def setUp(self):
+        MemberFactory.create_batch(5)
+        self.member = MemberFactory.create()
+
+    def test_create_public_key(self):
+        # Even though the text doesn't really represent a valid RSA key
+        # it is enough to test the service endpoint's correctness
+        key_text = 'asdf'
+        request_object = {
+            'key_text': key_text,
+        }
+
+        response = self.post_json(request_object, member=self.member.pk)
+
+        # -- Correct actions?
+        self.assertEquals(1, PublicKey.objects.count())
+        pubkey = PublicKey.objects.all()[0]
+        self.assertEquals(pubkey.key_text, key_text)
+        # Associated to the correct member?
+        self.assertEquals(pubkey.member.pk, self.member.pk)
+        # -- Correct response?
+        # The status code indicates a created resource
+        self.assertEquals(201, response.status_code)
+        # Contains the resource representation
+        response_content = json.loads(response.content)
+        self.assertEquals(response_content['key_text'], key_text)
+
+    def test_list_public_keys(self):
+        """
+        Tests that the endpoint lists all public keys associated with
+        a single member.
+        """
+        key_count = 2
+        pubkeys = PublicKeyFactory.create_batch(
+                key_count, member=self.member)
+        # Create some other keys associated to different members
+        PublicKeyFactory.create_batch(
+                5,
+                member=Member.objects.exclude(pk=self.member.pk)[0])
+        PublicKeyFactory.create_batch(
+                5,
+                member=Member.objects.exclude(pk=self.member.pk)[1])
+
+        response = self.get(member=self.member.pk)
+
+        # Success
+        self.assertEquals(200, response.status_code)
+        # All the correct keys are returned
+        response_content = json.loads(response.content)
+        self.assertEquals(2, len(response_content))

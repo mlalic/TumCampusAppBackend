@@ -14,7 +14,12 @@ router.register(r'chat_rooms', views.ChatRoomViewSet)
 
 # Automatically generated routes, but not found in the api root
 simple_router = SimpleRouter()
-simple_router.register(r'chat_rooms/(?P<chat_room>[^/]+)/messages', views.ChatMessageViewSet)
+simple_router.register(
+    r'chat_rooms/(?P<chat_room>[^/]+)/messages',
+    views.ChatMessageViewSet)
+simple_router.register(
+    r'members/(?P<member>[^/]+)/pubkeys',
+    views.PublicKeyViewSet)
 
 urlpatterns = patterns('',
     url(r'^', include(router.urls)),
