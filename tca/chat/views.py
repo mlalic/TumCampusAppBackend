@@ -46,9 +46,10 @@ class FilteredModelViewSetMixin(object):
         return qs
 
 
-class MemberViewSet(viewsets.ModelViewSet):
+class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = Member
     serializer_class = MemberSerializer
+    filter_fields = ('lrz_id',)
 
 
 class ChatRoomViewSet(viewsets.ModelViewSet):
