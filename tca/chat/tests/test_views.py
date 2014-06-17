@@ -6,8 +6,12 @@ from urllib import urlencode
 import json
 
 from chat.models import Member
+from chat.models import Message
+from chat.models import ChatRoom
 
 from .factories import MemberFactory
+from .factories import MessageFactory
+from .factories import ChatRoomFactory
 
 
 class ViewTestCaseMixin(object):
@@ -250,3 +254,91 @@ class MemberListViewTestCase(ViewTestCaseMixin, TestCase):
         # There are no objects in the list
         response_content = json.loads(response.content)
         self.assertEquals(0, len(response_content))
+
+
+class MessageListTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for the REST endpoint for a list of messages: the endpoint needs
+    to be able to create a new message and list all existing messages.
+    """
+    view_name = 'message-list'
+
+    def setUp(self):
+        # Random members to fill up the database
+        MemberFactory.create_batch(2)
+        # Member that will be posting messages
+        self.member = MemberFactory.create()
+        # Random chat rooms to fill up the database
+        ChatRoomFactory.create_batch(5)
+        # Chat room to which the test messages will be posted
+        self.chat_room = ChatRoomFactory.create()
+
+    def _build_message_json(self, text, member):
+        """
+        Helper method which creates a Python dict representing the Message.
+        This dict is one suitable to be sent as a payload to the chat message
+        REST endpoint for creating a new chat message.
+        """
+        return {
+            'text': text,
+            'member': member.get_absolute_url(),
+        }
+
+    def test_create_message(self):
+        """
+        Tests that it creating a message (as a subordinate resource to an
+        existing chat room) is possible.
+        """
+        new_message_dict = self._build_message_json(
+            text='message text...',
+            member=self.member)
+
+        response = self.post_json(new_message_dict, chat_room=self.chat_room.pk)
+
+        # -- Actions are correct?
+        # Message created?
+        self.assertEquals(1, Message.objects.count())
+        message = Message.objects.all()[0]
+        # Message in the correct chat room?
+        self.assertEquals(message.chat_room.pk, self.chat_room.pk)
+        # Associated to the correct member?
+        self.assertEquals(message.member.pk, self.member.pk)
+        # -- Correct response
+        # The response indicates a successfully created message
+        self.assertEquals(201, response.status_code)
+        # The response contains a representation of the created message
+        response_content = json.loads(response.content)
+        self.assertEquals(
+                response_content['text'],
+                new_message_dict['text'])
+        # Has an automatic time stamp?
+        self.assertIn('timestamp', response_content)
+        # Links to the member who posted it?
+        self.assertTrue(response_content['member'].endswith(
+            self.member.get_absolute_url()))
+        # Has a link for message details?
+        self.assertTrue(response_content['url'].endswith(
+            message.get_absolute_url()))
+
+    def test_list_messages(self):
+        """
+        Tests that it is possible to list all existing messages of a chat
+        room.
+        """
+        # Set up some messages to the chat room
+        message_count = 5
+        messages = MessageFactory.create_batch(
+            message_count, chat_room=self.chat_room)
+        # Create some chat messages to a different chat room
+        MessageFactory.create_batch(5,
+                chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
+
+        response = self.get(chat_room=self.chat_room.pk)
+
+        # Correct response status code
+        self.assertEquals(200, response.status_code)
+        # All the messages are returned?
+        response_content = json.loads(response.content)
+        self.assertEquals(message_count, len(response_content))
+        for message, response_message in zip(messages, response_content):
+            self.assertEquals(message.text, response_message['text'])
