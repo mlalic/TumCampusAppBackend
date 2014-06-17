@@ -32,13 +32,11 @@ class FilteredModelViewSetMixin(object):
 
     def get_queryset(self):
         qs = super(FilteredModelViewSetMixin, self).get_queryset()
-        print self.filter_fields
         if self.filter_fields is None:
             return qs
 
         for filter_field in self.filter_fields:
             if filter_field in self.request.QUERY_PARAMS:
-                print 'FIltering on ' + filter_field
                 qs = qs.filter(**{
                     filter_field: self.request.QUERY_PARAMS[filter_field]
                 })
