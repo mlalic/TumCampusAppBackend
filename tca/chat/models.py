@@ -5,6 +5,8 @@ from django.utils.encoding import python_2_unicode_compatible
 
 from django.core.urlresolvers import reverse
 
+from chat import crypto
+
 
 @python_2_unicode_compatible
 class Member(models.Model):
@@ -75,3 +77,37 @@ class Message(models.Model):
             'chat_room': self.chat_room.pk,
             'pk': self.pk,
         })
+
+    @property
+    def valid_signature(self):
+        """
+        Return a boolean indicating whether the signature attached to the
+        message matches any of the public keys associated to the user to
+        which the message is related.
+        """
+        for pubkey in self.member.public_keys.all():
+            if crypto.verify(self.text, self.signature, pubkey.key_text):
+                return True
+
+        return False
+
+    def validate_signature(self):
+        """
+        Updates the validity of the message based on its signature. If the
+        signature is found to match with a public key of the user with
+        which it is associated, the valid ``field`` is set to ``True``.
+
+        In case the signature is found to be invalid, the ``valid`` is
+        made sure to be ``False``, but the instance is not deleted.
+
+        The way clients handle invalid messages is left up to them.
+        """
+        if self.valid_signature:
+            self.valid = True
+            self.save()
+            return True
+        else:
+            if self.valid:
+                self.valid = False
+                self.save()
+            return False
