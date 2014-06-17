@@ -52,9 +52,10 @@ class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     filter_fields = ('lrz_id',)
 
 
-class ChatRoomViewSet(viewsets.ModelViewSet):
+class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = ChatRoom
     serializer_class = ChatRoomSerializer
+    filter_fields = ('name',)
 
     @action()
     def add_member(self, request, pk=None):
