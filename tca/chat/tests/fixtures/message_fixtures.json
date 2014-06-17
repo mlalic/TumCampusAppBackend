@@ -1,0 +1,14 @@
+{
+    "simple-message": {
+        "text": "This is a message!",
+        "signature": "MwBZFVhzIGehiGAVaoxp0k04BJN8YyyqlPQg1hXwg1bQxgjtEXz6KsVzYOWo40/TdhcbUHo+hUhk\n/rLLBrkFldQuNGhd/ltwiMeN2KwdLYm5nl9DWIjPXXviCBogkVtwrBdAhgknr5Kn5Zy4TbGdMr9z\nd/iOl27L7GYepazgNW8="
+    },
+    "unicode-1": {
+        "text": "A message with German characters: öäüßÖÄÜ!",
+        "signature": "qCOAmFho4tKW24qn6vv6j0x4jc3OVKPbVVm7EqYeJKBStGOmEcx6Crtx0MEMFxNe4Zyqo0kYMXNO\n/NPTvhUJlAr5x6Hlc1iKWBT5eGE8F3mKE8pTSObrCWhEBXylQjkwej5eQpahW+uexZWzeme702V0\n1C3FoeYUC9rSOfLlyss="
+    },
+    "unicode-korean": {
+        "text": "This is a Korean message: 좋은 게임",
+        "signature": "L6DPFzKiVWrO3TeAjJwPNtC4U5D69ODloH3zmCXCpZx+fiZhopzC5cUAeolm2l/++KYZu3vR6IJK\nHLjXaMd4jDruY8DiWNmCbOnR/ywHQ96sCuMcdfhot5AgM05NbBH7GiAFBDJQzDejuK7M7hGmHZ6s\nL4WYKETiNiP1Oc6d58w="
+    }
+}
