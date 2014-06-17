@@ -5,4 +5,4 @@ install:
   # Build/test dependencies
   - pip install -r tca/requirements.txt --use-mirrors
 script:
-  - python tca/manage.py test
+  - python tca/manage.py test tca/
