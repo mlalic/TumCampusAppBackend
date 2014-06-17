@@ -16,6 +16,8 @@ from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
 from chat.serializers import PublicKeySerializer
 
+from chat import hooks
+
 
 class FilteredModelViewSetMixin(object):
     """
@@ -135,3 +137,12 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
         ChatRoom instance to the newly created message.
         """
         message.chat_room = self._chat_room_instance()
+
+    def post_save(self, message, *args, **kwargs):
+        """
+        Implement the hook method to trigger the validation of the message's
+        signature.
+        """
+        # For now the signature is validated completely synchronously to
+        # the request.
+        hooks.validate_message_signature(message)

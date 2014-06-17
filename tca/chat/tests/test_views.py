@@ -4,6 +4,7 @@ from django.core.urlresolvers import reverse
 from urllib import urlencode
 
 import json
+import mock
 
 from chat.models import Member
 from chat.models import Message
@@ -286,7 +287,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
             'member': member.get_absolute_url(),
         }
 
-    def test_create_message(self):
+    @mock.patch('chat.views.hooks.validate_message_signature')
+    def test_create_message(self, mock_validate_signature):
         """
         Tests that it creating a message (as a subordinate resource to an
         existing chat room) is possible.
@@ -307,6 +309,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(message.member.pk, self.member.pk)
         # Is not marked as valid yet?
         self.assertFalse(message.valid)
+        # Validation was triggered, though?
+        mock_validate_signature.assert_called_once_with(message)
         # -- Correct response
         # The response indicates a successfully created message
         self.assertEquals(201, response.status_code)
@@ -324,7 +328,9 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         self.assertTrue(response_content['url'].endswith(
             message.get_absolute_url()))
 
-    def test_create_message_valid_field_override(self):
+    @mock.patch('chat.views.hooks.validate_message_signature')
+    def test_create_message_valid_field_override(
+            self, mock_validate_signature):
         """
         Test that when a new message is created through the REST endpoint,
         the valid field cannot be overridden.
