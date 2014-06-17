@@ -22,6 +22,20 @@ class Member(models.Model):
 
 
 @python_2_unicode_compatible
+class PublicKey(models.Model):
+    """
+    A model representing a member's public key
+    """
+    key_text = models.TextField()
+    member = models.ForeignKey(Member, related_name='public_keys')
+
+    def __str__(self):
+        return '{key} <{member}>'.format(
+            key=self.key_text_encoding,
+            member=self.member)
+
+
+@python_2_unicode_compatible
 class ChatRoom(models.Model):
     name = models.CharField(max_length=100, unique=True)
     members = models.ManyToManyField(Member, related_name='chat_rooms')
