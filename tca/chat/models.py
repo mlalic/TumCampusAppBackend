@@ -16,7 +16,7 @@ class Member(models.Model):
 
 @python_2_unicode_compatible
 class ChatRoom(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     members = models.ManyToManyField(Member, related_name='chat_rooms')
 
     def __str__(self):
