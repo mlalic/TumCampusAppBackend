@@ -14,6 +14,38 @@ from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
 
 
+class FilteredModelViewSetMixin(object):
+    """
+    A mixin providing the possibility to filter the queryset based on
+    query parameters.
+
+    The mixin overrides the ``get_queryset`` method to return the original
+    queryset addiotionally filtered based on the query string parameters.
+
+    Each additional filter is a test for direct equality.
+
+    Classes mixing-in the Mixin should provide the ``filter_fields``
+    property to provide a list of fields for which filtering should
+    be supported.
+    """
+    filter_fields = None
+
+    def get_queryset(self):
+        qs = super(FilteredModelViewSetMixin, self).get_queryset()
+        print self.filter_fields
+        if self.filter_fields is None:
+            return qs
+
+        for filter_field in self.filter_fields:
+            if filter_field in self.request.QUERY_PARAMS:
+                print 'FIltering on ' + filter_field
+                qs = qs.filter(**{
+                    filter_field: self.request.QUERY_PARAMS[filter_field]
+                })
+
+        return qs
+
+
 class MemberViewSet(viewsets.ModelViewSet):
     model = Member
     serializer_class = MemberSerializer
