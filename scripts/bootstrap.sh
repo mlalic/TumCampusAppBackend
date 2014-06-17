@@ -24,6 +24,7 @@ ln -s /vagrant/tca /home/vagrant/tca
 su vagrant <<'EOF'
 . `which virtualenvwrapper.sh`
 mkvirtualenv tca-dev
+pip install -r /home/vagrant/tca/requirements.txt
 pip install -r /home/vagrant/tca/requirements-dev.txt
 # Initial syncdb, just in case
 cd ~/tca/ && ./manage.py syncdb --noinput
