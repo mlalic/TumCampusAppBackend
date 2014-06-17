@@ -59,6 +59,16 @@ class ChatRoomSerializer(serializers.HyperlinkedModelSerializer):
 class MessageSerializer(serializers.HyperlinkedModelSerializer):
     url = serializers.SerializerMethodField('get_url')
 
+    read_only_fields = ('valid',)
+
+    def __init__(self, *args, **kwargs):
+        """
+        Override the init method to set some fields as read only.
+        """
+        super(MessageSerializer, self).__init__(*args, **kwargs)
+        for field_name in self.read_only_fields:
+            self.fields[field_name].read_only = True
+
     def get_url(self, message):
         """Customized version of obtaining the object's URL.
         Necessary because the resource is a subordinate of a chatroom

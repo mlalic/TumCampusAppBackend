@@ -305,6 +305,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(message.chat_room.pk, self.chat_room.pk)
         # Associated to the correct member?
         self.assertEquals(message.member.pk, self.member.pk)
+        # Is not marked as valid yet?
+        self.assertFalse(message.valid)
         # -- Correct response
         # The response indicates a successfully created message
         self.assertEquals(201, response.status_code)
@@ -321,6 +323,24 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         # Has a link for message details?
         self.assertTrue(response_content['url'].endswith(
             message.get_absolute_url()))
+
+    def test_create_message_valid_field_override(self):
+        """
+        Test that when a new message is created through the REST endpoint,
+        the valid field cannot be overridden.
+        """
+        new_message_dict = self._build_message_json(
+            text='message text...',
+            member=self.member)
+        new_message_dict['valid'] = True
+
+        response = self.post_json(
+                new_message_dict,
+                chat_room=self.chat_room.pk)
+
+        self.assertEquals(1, Message.objects.count())
+        message = Message.objects.all()[0]
+        self.assertFalse(message.valid)
 
     def test_list_messages(self):
         """
