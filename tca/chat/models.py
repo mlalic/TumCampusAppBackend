@@ -28,6 +28,7 @@ class Message(models.Model):
     text = models.TextField()
     member = models.ForeignKey(Member, related_name='messages')
     chat_room = models.ForeignKey(ChatRoom, related_name='messages')
+    timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return '{text} ({member})'.format(
