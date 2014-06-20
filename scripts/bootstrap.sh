@@ -5,7 +5,13 @@
 # System-level dependencies
 
 # Deb packages
-apt-get -y install python-pip
+# Set up rabbitmq repo
+echo 'deb http://www.rabbitmq.com/debian/ testing main' >>/etc/apt/sources.list
+wget http://www.rabbitmq.com/rabbitmq-signing-key-public.asc
+apt-key add rabbitmq-signing-key-public.asc
+
+apt-get update
+apt-get -y install python-pip python-dev rabbitmq-server
 
 # Python packages
 pip install virtualenv virtualenvwrapper
