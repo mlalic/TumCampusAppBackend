@@ -11,4 +11,5 @@ kombu==3.0.19
 mock==1.0.1
 pycrypto==2.6.1
 pytz==2014.4
+python-gcm==0.1.5
 wsgiref==0.1.2

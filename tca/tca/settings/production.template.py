@@ -12,3 +12,9 @@ a symlink to it from a ``local_settings.py`` file, i.e.::
 
 #: Make sure to provide a real celery broker
 # BROKER_URL = 'amqp://guest:guest@localhost//'
+
+#: Make sure that GCM notifications are enabled
+TCA_ENABLE_GCM_NOTIFICATIONS = True
+
+#: Make sure to provide an API key for GCM
+# TCA_GCM_API_KEY = ""

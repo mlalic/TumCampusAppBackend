@@ -5,6 +5,13 @@ notifying users of newly sent messages.
 
 from django.conf import settings
 
+from gcm import GCM
+import json
+
+from rest_framework.renderers import JSONRenderer
+
+from chat.serializers import MessageSerializer
+
 
 class NotifierMeta(type):
     """
@@ -75,3 +82,84 @@ def get_notifiers():
         for notifier_class in BaseNotifier.notifiers
         if notifier_class.is_enabled()
     )
+
+
+class GcmNotifier(BaseNotifier):
+    """
+    Google Cloud Messaging notifications for new messages.
+    """
+
+    def __init__(self, api_key):
+        self._gcm = GCM(api_key)
+
+    @classmethod
+    def get_instance(cls):
+        return cls(settings.TCA_GCM_API_KEY)
+
+    @classmethod
+    def is_enabled(cls):
+        return settings.TCA_ENABLE_GCM_NOTIFICATIONS
+
+    def notify(self, message):
+        """
+        Sends a notification to all members of the chat group to which
+        the given message was posted.
+
+        It makes sure to send only a single request off to the GCM servers
+        by batching all ``registration_id`` together in the request.
+        """
+        # Batch the registraion IDs to which a notification is to be sent
+        registration_ids = self._get_registration_ids(message)
+        if len(registration_ids) == 0:
+            # No need to do anything if there's no one to send the notification
+            # to
+            return
+        # Obtain the data to be sent
+        data = self._message_to_data(message)
+
+        # Finally perform the send request
+        self._send_request(registration_ids, data)
+
+    def _get_registration_ids(self, message):
+        # Get all members apart from the sender themselves
+        members = message.chat_room.members.exclude(pk=message.member.pk)
+
+        # Batch all of their registration_ids
+        registration_ids = []
+        for member in members:
+            registration_ids.extend(member.registration_ids)
+
+        return registration_ids
+
+    def _message_to_data(self, message):
+        """
+        Converts the given :class:`chat.models.Message` instance to a Python
+        dict suitable to be transferred in the GCM notification.
+        """
+        # Leverage the MessageSerializer to get the serialized representation
+        # of a Message
+        serializer = MessageSerializer(message)
+
+        json_message = JSONRenderer().render(serializer.data)
+
+        # Convert the JSON back to a dict so that the GCM package can
+        # correctly handle the request
+        return json.loads(json_message)
+
+    def _send_request(self, registration_ids, data):
+        """
+        Sends the notification to GCM servers where the registration ids
+        are set to the ones given as the parameter.
+
+        :param registration_ids: A list of registration IDs which are to
+            receive the notification
+        :param data: The data which is to be included in the notification
+            as a Python dict
+        """
+        try:
+            response = self._gcm.json_request(
+                registration_ids=registration_ids,
+                data=data)
+        except:
+            # Gotta catch 'em all!
+            pass
