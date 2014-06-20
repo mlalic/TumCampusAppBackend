@@ -52,3 +52,5 @@ docs/_build/
 # Temporary database files
 *.sqlite3
 
+# Local settings
+local_settings.py

@@ -28,4 +28,6 @@ pip install -r /home/vagrant/tca/requirements.txt
 pip install -r /home/vagrant/tca/requirements-dev.txt
 # Initial syncdb, just in case
 cd ~/tca/ && ./manage.py syncdb --noinput
+# Set up development settings for the Vagrant box
+cd ~/tca/tca/settings/ && ln -s development.py local_settings.py
 EOF
