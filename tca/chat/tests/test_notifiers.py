@@ -8,6 +8,7 @@ from django.test.utils import override_settings
 import mock
 
 from chat.notifiers import GcmNotifier
+from chat.hooks import validate_message_signature
 
 from .factories import MemberFactory
 from .factories import MessageFactory
@@ -169,3 +170,45 @@ class GcmNotifierTestCase(TestCase):
         notifier = GcmNotifier.get_instance()
 
         gcm_mock.assert_called_once_with('override-settings-dummy-api-key')
+
+
+@mock.patch('chat.hooks.send_message_notifications')
+class ValidateMessageHookTestCase(TestCase):
+    """
+    Tests that the :func:`chat.tasks.send_message_notifications` task is
+    initiated after message validation.
+    """
+    def setUp(self):
+        # A mock message which will be passed to the function-under-test
+        self.message = mock.MagicMock()
+        self.mock_pk = 5
+        self.message.pk = self.mock_pk
+
+    def set_message_signature_validity(self, valid):
+        """
+        Helper method sets the validty of the mock message passed to the
+        :func:`chat.hooks.validate_message_signature` function.
+        """
+        self.message.validate_signature.return_value = valid
+
+    def test_valid_signature(self, mock_send_notifications):
+        """
+        Tests that when a message is found to be valid, the notification
+        is initiated.
+        """
+        self.set_message_signature_validity(True)
+
+        validate_message_signature(self.message)
+
+        mock_send_notifications.delay.assert_called_once_with(self.mock_pk)
+
+    def test_invalid_signature(self, mock_send_notifications):
+        """
+        Tests that when a message is found to be invalid, there is no
+        notification initiated.
+        """
+        self.set_message_signature_validity(False)
+
+        validate_message_signature(self.message)
+
+        self.assertFalse(mock_send_notifications.delay.called)
