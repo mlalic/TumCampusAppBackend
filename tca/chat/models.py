@@ -25,6 +25,15 @@ class Member(models.Model):
             'pk': self.pk,
         })
 
+    @property
+    def lrz_email(self):
+        """
+        Returns the email derived from the user's LRZ ID.
+        """
+        TEMPLATE = "{lrz_id}@mytum.de"
+
+        return TEMPLATE.format(lrz_id=self.lrz_id)
+
 
 @python_2_unicode_compatible
 class PublicKey(models.Model):

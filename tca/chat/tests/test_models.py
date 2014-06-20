@@ -17,7 +17,6 @@ from .factories import PublicKeyFactory
 import os
 import json
 
-
 class MessageSignatureValidationTestCase(TestCase):
     """
     Tests for the :class:`chat.models.Message` model regarding signature
@@ -138,3 +137,17 @@ class MessageSignatureValidationTestCase(TestCase):
         # did not change
         message = Message.objects.get(pk=message.pk)
         self.assertFalse(message.valid)
+
+
+class MemberTestCase(TestCase):
+    def setUp(self):
+        self.member = MemberFactory.create()
+
+    def test_lrz_email(self):
+        """
+        Test that a member's email derived from the LRZ ID is correctly
+        generated.
+        """
+        expected = self.member.lrz_id + "@mytum.de"
+
+        self.assertEquals(expected, self.member.lrz_email)
