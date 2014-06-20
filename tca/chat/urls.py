@@ -26,6 +26,9 @@ registration_id_urls = (
     url(r'^members/(?P<member_id>[^/]+)/registration_ids/add_id$',
         views.AddRegistrationIdView.as_view(),
         name='add-registration-id'),
+    url(r'^members/(?P<member_id>[^/]+)/registration_ids/remove_id$',
+        views.RemoveRegistrationIdView.as_view(),
+        name='remove-registration-id'),
 )
 
 urlpatterns = patterns('',

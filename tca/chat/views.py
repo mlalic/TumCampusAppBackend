@@ -137,6 +137,20 @@ class AddRegistrationIdView(RegistrationIdViewMixin, APIView):
         member.registration_ids.append(self.get_registration_id())
 
         member.save()
+
+
+class RemoveRegistrationIdView(RegistrationIdViewMixin, APIView):
+    def process(self):
+        member = self.get_member()
+        try:
+            member.registration_ids.remove(self.get_registration_id())
+        except ValueError:
+            # No such registration ID
+            # No need to do anything special, just swallow the exception
+            pass
+        else:
+            # If there was something removed, update the member
+            member.save()
 class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = ChatRoom
     serializer_class = ChatRoomSerializer
