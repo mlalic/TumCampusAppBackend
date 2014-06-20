@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from chat.models import Member
 from chat.models import Message
@@ -92,6 +93,50 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         public_key.member = self._member_parent_instance()
 
 
+
+class RegistrationIdViewMixin(object):
+    """
+    A mixin providing methods for views which handle registration IDs.
+
+    Registration IDs are essentially identifiers of the user's Android
+    devices.
+    """
+
+    member_id_field = 'member_id'
+
+    HTTP_422_UNPROCESSABLE_ENTITY = 422
+
+    def get_member(self):
+        """
+        Obtain a :class:`chat.models.Member` instance for the particular
+        request.
+        """
+        return get_object_or_404(Member, pk=self.kwargs[self.member_id_field])
+
+    def get_registration_id(self):
+        """
+        Returns the registration ID being referenced in the request body.
+        """
+        return self.request.DATA['registration_id']
+
+    def post(self, request, member_id, format=None):
+        # Validate the request
+        if 'registration_id' not in self.request.DATA:
+            return Response("", status=self.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        self.process()
+
+        return Response({
+            "status": "ok",
+        })
+
+
+class AddRegistrationIdView(RegistrationIdViewMixin, APIView):
+    def process(self):
+        member = self.get_member()
+        member.registration_ids.append(self.get_registration_id())
+
+        member.save()
 class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = ChatRoom
     serializer_class = ChatRoomSerializer
