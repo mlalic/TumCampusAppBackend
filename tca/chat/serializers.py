@@ -12,6 +12,7 @@ class MemberSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Member
+        exclude = ('registration_ids',)
 
     def get_public_keys_url(self, member):
         return reverse(

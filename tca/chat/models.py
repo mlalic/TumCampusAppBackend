@@ -5,6 +5,8 @@ from django.utils.encoding import python_2_unicode_compatible
 
 from django.core.urlresolvers import reverse
 
+from jsonfield import JSONField
+
 from chat import crypto
 
 
@@ -13,6 +15,7 @@ class Member(models.Model):
     lrz_id = models.CharField(max_length=7, unique=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
+    registration_ids = JSONField(default=())
 
     def __str__(self):
         return self.lrz_id
