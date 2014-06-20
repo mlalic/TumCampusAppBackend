@@ -21,7 +21,19 @@ simple_router.register(
     r'members/(?P<member>[^/]+)/pubkeys',
     views.PublicKeyViewSet)
 
+#: URLs dealing with handling Android device GCM registration IDs
+registration_id_urls = (
+    url(r'^members/(?P<member_id>[^/]+)/registration_ids/add_id$',
+        views.AddRegistrationIdView.as_view(),
+        name='add-registration-id'),
+    url(r'^members/(?P<member_id>[^/]+)/registration_ids/remove_id$',
+        views.RemoveRegistrationIdView.as_view(),
+        name='remove-registration-id'),
+)
+
 urlpatterns = patterns('',
     url(r'^', include(router.urls)),
     url(r'^', include(simple_router.urls)),
 )
+
+urlpatterns += registration_id_urls

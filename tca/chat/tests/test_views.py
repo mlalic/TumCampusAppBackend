@@ -431,3 +431,190 @@ class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
         # All the correct keys are returned
         response_content = json.loads(response.content)
         self.assertEquals(2, len(response_content))
+
+
+class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for adding a new registration ID to a :class:`chat.models.Member`
+    """
+
+    view_name = 'add-registration-id'
+
+    def setUp(self):
+        self.member = MemberFactory.create()
+
+    def reload_member(self):
+        """
+        Helper method which reloads the ``member`` instance from
+        the database.
+        """
+        self.member = Member.objects.get(pk=self.member.pk)
+
+    def test_add_registration_id(self):
+        """
+        Tests that adding a registration ID works correctly when the
+        existing member has no registration IDs associated.
+        """
+        registration_id = 'kfds43vb'
+
+        response = self.post_json({
+            'registration_id': registration_id,
+        }, member_id=self.member.pk)
+
+        self.assertEquals(200, response.status_code)
+        self.reload_member()
+        # Registration ID in the list?
+        self.assertEquals(1, len(self.member.registration_ids))
+        # Correct value?
+        self.assertEquals(
+            registration_id,
+            self.member.registration_ids[0])
+    
+    def test_add_registration_id_existing(self):
+        """
+        Tests that adding a registration ID to a Member with some IDs
+        already associated to it works correctly
+        """
+        initial_ids = ["asdf", "bdsa"]
+        self.member.registration_ids = initial_ids
+        self.member.save()
+        self.reload_member()
+        # Sanity check
+        self.assertListEqual(initial_ids, self.member.registration_ids)
+
+        new_id = "thisisanewid"
+        response = self.post_json({
+            'registration_id': new_id,
+        }, member_id=self.member.pk)
+
+        self.assertEquals(200, response.status_code)
+        self.reload_member()
+        self.assertListEqual(
+            initial_ids + [new_id],
+            self.member.registration_ids)
+
+    def test_add_registration_id_invalid_json(self):
+        """
+        Tests the response to an invalid JSON payload.
+        """
+        response = self.post(
+            "this is not valid JSON",
+            member_id=self.member.pk)
+
+        self.assertEquals(400, response.status_code)
+
+    def test_no_registration_id_in_request(self):
+        """
+        Tests the response to a request containing a valid JSON payload,
+        but which does not contain a ``registration_id`` field.
+        """
+        response = self.post_json({
+            'key': 'value',
+        }, member_id=self.member.pk)
+
+        self.assertEquals(422, response.status_code)
+
+    def test_non_existent_member(self):
+        """
+        Tests the response to a request issued to a non-existent member
+        resource.
+        """
+        response = self.post_json({
+            'registration_id': 'asdf',
+        }, member_id=self.member.pk + 5)
+
+        self.assertEquals(404, response.status_code)
+
+
+class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for removing a registration ID from a :class:`chat.models.Member`
+    """
+
+    view_name = 'remove-registration-id'
+
+    def setUp(self):
+        self.member = MemberFactory.create()
+
+        self.initial_ids = ["asdf", "fdsa"]
+        self.member.registration_ids = self.initial_ids
+        self.member.save()
+        self.reload_member()
+
+    def reload_member(self):
+        """
+        Helper method which reloads the ``member`` instance from
+        the database.
+        """
+        self.member = Member.objects.get(pk=self.member.pk)
+
+    def test_remove_registration_id(self):
+        """
+        Tests that removing a registration ID works correctly.
+        """
+        registration_id = self.initial_ids[0]
+
+        response = self.post_json({
+            'registration_id': registration_id,
+        }, member_id=self.member.pk)
+
+        self.assertEquals(200, response.status_code)
+        self.reload_member()
+        # Registration ID not in the list?
+        self.assertNotIn(registration_id, self.member.registration_ids)
+        expected_list = self.initial_ids[:]
+        expected_list.remove(registration_id)
+        self.assertListEqual(expected_list, self.member.registration_ids)
+    
+    def test_registration_id_non_existent(self):
+        """
+        Tests that trying to remove a registration ID which is not
+        associated to a particular member does not cause any errors.
+        """
+        registration_id = 'id-not-in-initial-list'
+        # Sanity check
+        self.assertNotIn(registration_id, self.initial_ids,
+                         "Sanity check failure -- invalid test fixture.")
+
+        response = self.post_json({
+            'registration_id': registration_id,
+        }, member_id=self.member.pk)
+
+        self.assertEquals(200, response.status_code)
+        self.reload_member()
+        # Registration ID not in the list?
+        self.assertNotIn(registration_id, self.member.registration_ids)
+        # List not modified?
+        self.assertListEqual(self.initial_ids, self.member.registration_ids)
+
+    def test_invalid_json(self):
+        """
+        Tests the response to an invalid JSON payload.
+        """
+        response = self.post(
+            "this is not valid JSON",
+            member_id=self.member.pk)
+
+        self.assertEquals(400, response.status_code)
+
+    def test_no_registration_id_in_request(self):
+        """
+        Tests the response to a request containing a valid JSON payload,
+        but which does not contain a ``registration_id`` field.
+        """
+        response = self.post_json({
+            'key': 'value',
+        }, member_id=self.member.pk)
+
+        self.assertEquals(422, response.status_code)
+
+    def test_non_existent_member(self):
+        """
+        Tests the response to a request issued to a non-existent member
+        resource.
+        """
+        response = self.post_json({
+            'registration_id': 'asdf',
+        }, member_id=self.member.pk + 5)
+
+        self.assertEquals(404, response.status_code)
