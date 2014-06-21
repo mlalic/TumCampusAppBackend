@@ -36,7 +36,7 @@ class PublicKey(models.Model):
 
     def __str__(self):
         return '{key} <{member}>'.format(
-            key=self.key_text_encoding,
+            key=self.key_text,
             member=self.member)
 
     def get_absolute_url(self):
