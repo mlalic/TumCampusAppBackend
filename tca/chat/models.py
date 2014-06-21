@@ -45,6 +45,7 @@ class PublicKey(models.Model):
     """
     key_text = models.TextField()
     member = models.ForeignKey(Member, related_name='public_keys')
+    active = models.BooleanField(default=False)
 
     def __str__(self):
         return '{key} <{member}>'.format(
@@ -83,6 +84,18 @@ class PublicKeyConfirmation(models.Model):
 
     def __str__(self):
         return self.confirmation_key
+
+    def confirm(self):
+        """
+        Perform the confirmation of the associated :class:`PublicKey`
+
+        This method permanently deletes the :class:`PublicKeyConfirmation`
+        instance it is invoked upon.
+        """
+        self.public_key.active = True
+        self.public_key.save()
+
+        self.delete()
 
 
 @python_2_unicode_compatible
