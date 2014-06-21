@@ -10,6 +10,7 @@ from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
 from chat.models import PublicKey
+from chat.models import PublicKeyConfirmation
 
 from .factories import MemberFactory
 from .factories import MessageFactory
@@ -618,3 +619,117 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         }, member_id=self.member.pk + 5)
 
         self.assertEquals(404, response.status_code)
+
+
+class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for the view which is used to confirm the validity of a
+    public key.
+    """
+    view_name = 'confirmation-view'
+
+    def setUp(self):
+        self.members = MemberFactory.create_batch(5)
+        self.member = self.members[1]
+
+        self.dummy_key_text = 'dummy-key-text'
+        self.public_key = self.member.public_keys.create(
+            key_text=self.dummy_key_text)
+
+    def set_up_confirmation(self, public_key):
+        """
+        Helper method which sets up a PublicKeyConfirmation instance for
+        the given public key.
+        """
+        return PublicKeyConfirmation.objects.create(public_key=public_key)
+
+    def test_confirm_key(self):
+        """
+        Tests that confirming an existing key works as expected.
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(confirmation_key=confirmation.confirmation_key)
+
+        # Correct response?
+        self.assertEquals(200, response.status_code)
+        self.assertIn('text/html', response['Content-Type'])
+        # Rendered the correct template?
+        self.assertTemplateUsed(response, 'confirmation-success.html')
+        self.assertEquals(
+            self.public_key.key_text,
+            response.context['public_key_text'])
+        self.assertTrue(response.context['url'].endswith(
+            self.public_key.get_absolute_url()))
+        self.assertContains(response, self.public_key.key_text)
+        # Correct actions?
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # The public key is enabled
+        # (reload the PK from the database first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertTrue(self.public_key.active)
+
+    def test_non_existent_confirmation_key(self):
+        """
+        Tests the view when a non-exitent confirmation key is passed to it
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+
+        response = self.get(confirmation_key='this-key-does-not-exist')
+
+        self.assertEquals(404, response.status_code)
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+
+    def test_public_key_removed(self):
+        """
+        Tests the view when the public key associated to the confirmation
+        was removed in the mean time.
+        """
+        # Set up a confirmation
+        confirmation = self.set_up_confirmation(self.public_key)
+        # But now delete the PK
+        self.public_key.delete()
+
+        response = self.get(confirmation_key=confirmation.confirmation_key)
+
+        # Resource not found
+        self.assertEquals(404, response.status_code)
+        # The confirmation is also removed automatically
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+
+    def test_response_json(self):
+        """
+        Test that the view can return a JSON response.
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(
+            confirmation_key=confirmation.confirmation_key,
+            format='json')
+
+        # Correct response?
+        self.assertEquals(200, response.status_code)
+        self.assertIn('application/json', response['Content-Type'])
+        # Correctly rendered?
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            self.public_key.key_text,
+            response_content['public_key_text'])
+        self.assertTrue(response_content['url'].endswith(
+            self.public_key.get_absolute_url()))
+        # Correct actions?
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # The public key is enabled
+        # (reload the PK from the database first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertTrue(self.public_key.active)

@@ -34,6 +34,15 @@ registration_id_urls = (
 urlpatterns = patterns('',
     url(r'^', include(router.urls)),
     url(r'^', include(simple_router.urls)),
+
 )
 
 urlpatterns += registration_id_urls
+urlpatterns += (
+    url(r'^confirmation/(?P<confirmation_key>[^/]+?)/$',
+        views.PublicKeyConfirmationView.as_view(),
+        name='confirmation-view'),
+    url(r'^confirmation/(?P<confirmation_key>[^/]+?)/\.(?P<format>(html|json))/$',
+        views.PublicKeyConfirmationView.as_view(),
+        name='confirmation-view'),
+)
