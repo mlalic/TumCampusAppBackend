@@ -157,7 +157,9 @@ class Message(models.Model):
         message matches any of the public keys associated to the user to
         which the message is related.
         """
-        for pubkey in self.member.public_keys.all():
+        # Only the valid keys of the member are considered when validating
+        # the Message.
+        for pubkey in self.member.public_keys.filter(active=True):
             if crypto.verify(self.text, self.signature, pubkey.key_text):
                 return True
 

@@ -50,7 +50,8 @@ class MessageSignatureValidationTestCase(TestCase):
         # Use a real pubkey for the fixture
         self.public_key = PublicKeyFactory.create(
             member=self.member,
-            key_text=self._load_pubkey())
+            key_text=self._load_pubkey(),
+            active=True)
         # Set up a chat room to which messages could be posted
         ChatRoomFactory.create()
         # Load the message fixtures too
@@ -135,6 +136,28 @@ class MessageSignatureValidationTestCase(TestCase):
         message = MessageFactory.create(
                 text=fixture['text'],
                 signature='asdf')
+
+        result = message.validate_signature()
+
+        self.assertFalse(result)
+        self.assertFalse(message.valid_signature)
+        # Reload the message from the DB to make sure the valid status
+        # did not change
+        message = Message.objects.get(pk=message.pk)
+        self.assertFalse(message.valid)
+
+    def test_validate_signature_inactive(self):
+        """
+        Tests that when validating a signature inactive public keys
+        are ignored.
+        """
+        # Deactivate the key
+        self.public_key.active = False
+        self.public_key.save()
+        fixture = self.message_fixtures['simple-message']
+        message = MessageFactory.create(
+                text=fixture['text'],
+                signature=fixture['signature'])
 
         result = message.validate_signature()
 
