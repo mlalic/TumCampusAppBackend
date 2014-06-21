@@ -391,7 +391,8 @@ class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
         MemberFactory.create_batch(5)
         self.member = MemberFactory.create()
 
-    def test_create_public_key(self):
+    @mock.patch('chat.views.hooks.confirm_new_key')
+    def test_create_public_key(self, mock_confirm):
         # Even though the text doesn't really represent a valid RSA key
         # it is enough to test the service endpoint's correctness
         key_text = 'asdf'
@@ -407,6 +408,8 @@ class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(pubkey.key_text, key_text)
         # Associated to the correct member?
         self.assertEquals(pubkey.member.pk, self.member.pk)
+        # Ran the hook to confirm the key
+        mock_confirm.assert_called_once_with(pubkey)
         # -- Correct response?
         # The status code indicates a created resource
         self.assertEquals(201, response.status_code)

@@ -99,6 +99,12 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         """
         public_key.member = self._member_parent_instance()
 
+    def post_save(self, public_key, *args, **kwargs):
+        """
+        Implement the hook method to initate the email confirmation of the
+        new key.
+        """
+        hooks.confirm_new_key(public_key)
 
 
 class RegistrationIdViewMixin(object):

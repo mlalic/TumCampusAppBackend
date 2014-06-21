@@ -17,6 +17,8 @@ from chat.models import PublicKeyConfirmation
 from chat.tasks import send_message_notifications
 from chat.tasks import send_confirmation_email
 
+from chat.hooks import confirm_new_key
+
 import mock
 
 
@@ -112,3 +114,33 @@ class EmailConfirmationTaskTestCase(TestCase):
         self.assertEquals(0, len(mail.outbox))
         # No confirmations created
         self.assertEquals(0, PublicKeyConfirmation.objects.count())
+
+    @override_settings(TCA_ENABLE_EMAIL_CONFIRMATIONS=True)
+    @mock.patch('chat.hooks.send_confirmation_email')
+    def test_hook_initiates_send_mail(self, mock_send_confirmation):
+        """
+        Tests that the :func:`chat.hooks.confirm_new_key` initiates the
+        task.
+        """
+        public_key = mock.MagicMock()
+        public_key.pk = 5
+
+        confirm_new_key(public_key)
+
+        mock_send_confirmation.delay.assert_called_once_with(public_key.pk)
+
+    @override_settings(
+        TCA_ENABLE_EMAIL_CONFIRMATIONS=False,
+        DEBUG=False)
+    @mock.patch('chat.hooks.send_confirmation_email')
+    def test_hook_does_not_send(self, mock_send_confirmation):
+        """
+        Tests that the :func:`chat.hooks.confirm_new_key` does not initiate
+        the task when disabled in the settings.
+        """
+        public_key = mock.MagicMock()
+        public_key.pk = 5
+
+        confirm_new_key(public_key)
+
+        self.assertFalse(mock_send_confirmation.delay.called)
