@@ -24,9 +24,21 @@ class MemberSerializer(serializers.HyperlinkedModelSerializer):
 class PublicKeySerializer(serializers.HyperlinkedModelSerializer):
     url = serializers.SerializerMethodField('get_url')
 
+    read_only_fields = ('active',)
+
     class Meta:
         model = PublicKey
-        exclude = ('member',)
+        exclude = (
+            'member',
+        )
+
+    def __init__(self, *args, **kwargs):
+        """
+        Override the init method to set some fields as read only.
+        """
+        super(PublicKeySerializer, self).__init__(*args, **kwargs)
+        for field_name in self.read_only_fields:
+            self.fields[field_name].read_only = True
 
     def get_url(self, public_key):
         """Customized version of obtaining the object's URL.
