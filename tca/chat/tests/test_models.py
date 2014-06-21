@@ -3,11 +3,15 @@ Tests for :mod:`chat` app models.
 """
 
 from django.test import TestCase
+from django.test.utils import override_settings
+
+from django.utils import timezone
 
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
 from chat.models import PublicKey
+from chat.models import PublicKeyConfirmation
 
 from .factories import MemberFactory
 from .factories import MessageFactory
@@ -16,6 +20,8 @@ from .factories import PublicKeyFactory
 
 import os
 import json
+import mock
+import datetime
 
 
 class MessageSignatureValidationTestCase(TestCase):
@@ -138,3 +144,77 @@ class MessageSignatureValidationTestCase(TestCase):
         # did not change
         message = Message.objects.get(pk=message.pk)
         self.assertFalse(message.valid)
+
+
+class MemberTestCase(TestCase):
+    def setUp(self):
+        self.member = MemberFactory.create()
+
+    def test_lrz_email(self):
+        """
+        Test that a member's email derived from the LRZ ID is correctly
+        generated.
+        """
+        expected = self.member.lrz_id + "@mytum.de"
+
+        self.assertEquals(expected, self.member.lrz_email)
+
+
+class PublicKeyConfirmationTestCase(TestCase):
+    def setUp(self):
+        self.member = MemberFactory.create_batch(5)[0]
+        self.pk = PublicKeyFactory.create(member=self.member)
+        self.confirmation = PublicKeyConfirmation.objects.create(
+            public_key=self.pk)
+
+    def offset_now(self, delta):
+        """
+        Helper method offsets the current time by the given delta.
+        """
+        timezone.now.return_value = self.confirmation.created + delta
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    @mock.patch('chat.models.timezone.now')
+    def test_expired_confirmation(self, mock_now):
+        """
+        Tests that a confirmation correctly expires after the time
+        given in the settings.
+        """
+        # Set the current time to the future when the confirmation
+        # should be expired
+        self.offset_now(datetime.timedelta(hours=2, seconds=1))
+
+        self.assertTrue(self.confirmation.is_expired())
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    @mock.patch('chat.models.timezone.now')
+    def test_not_expired_confirmation(self, mock_now):
+        """
+        Tests that a confirmation is not considered expired before the
+        time given in the settings.
+        """
+        # Set the current time to the future, but not enough that the
+        # key expires
+        self.offset_now(datetime.timedelta(hours=1))
+
+        self.assertFalse(self.confirmation.is_expired())
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    @mock.patch('chat.models.timezone.now')
+    def test_expired_edge(self, mock_now):
+        """
+        Tests the confirmation validity at the edges of the expiration
+        time period given in the settings.
+        """
+        # Just before the time in the settings
+        self.offset_now(
+            datetime.timedelta(hours=2, seconds=-1))
+        self.assertFalse(self.confirmation.is_expired())
+
+        # At the exact edge -- not expired yet!
+        self.offset_now(datetime.timedelta(hours=2))
+        self.assertFalse(self.confirmation.is_expired())
+
+        # Just after the edge -- expired
+        self.offset_now(datetime.timedelta(hours=2, seconds=1))
+        self.assertTrue(self.confirmation.is_expired())

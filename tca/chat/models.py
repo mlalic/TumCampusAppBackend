@@ -2,12 +2,18 @@ from __future__ import unicode_literals
 
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
+from django.utils import timezone
 
 from django.core.urlresolvers import reverse
+from django.conf import settings
 
 from jsonfield import JSONField
 
 from chat import crypto
+
+import random
+import string
+import datetime
 
 
 @python_2_unicode_compatible
@@ -25,6 +31,15 @@ class Member(models.Model):
             'pk': self.pk,
         })
 
+    @property
+    def lrz_email(self):
+        """
+        Returns the email derived from the user's LRZ ID.
+        """
+        TEMPLATE = "{lrz_id}@mytum.de"
+
+        return TEMPLATE.format(lrz_id=self.lrz_id)
+
 
 @python_2_unicode_compatible
 class PublicKey(models.Model):
@@ -33,6 +48,7 @@ class PublicKey(models.Model):
     """
     key_text = models.TextField()
     member = models.ForeignKey(Member, related_name='public_keys')
+    active = models.BooleanField(default=False)
 
     def __str__(self):
         return '{key} <{member}>'.format(
@@ -44,6 +60,59 @@ class PublicKey(models.Model):
             'member': self.member.pk,
             'pk': self.pk,
         })
+
+
+def _random_string(length=30):
+    """
+    Generates a random string of alphanumeric characters.
+    """
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(random.choice(alphabet) for _ in xrange(length))
+
+
+@python_2_unicode_compatible
+class PublicKeyConfirmation(models.Model):
+    """
+    Model providing a confirmation key for an uploaded public key.
+
+    Before a public key is made active, it is necessary for the user to
+    confirm it by providing the confirmation key which gets sent to his
+    LRZ email address.
+    """
+    confirmation_key = models.CharField(
+        default=_random_string,
+        max_length=30,
+        unique=True)
+    public_key = models.ForeignKey(PublicKey)
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.confirmation_key
+
+    def get_absolute_url(self):
+        return reverse('confirmation-view', kwargs={
+            'confirmation_key': self.confirmation_key,
+        })
+
+    def is_expired(self):
+        """
+        Method checks whether the confirmation has expired.
+        """
+        delta = timezone.now() - self.created
+        return delta > datetime.timedelta(
+            hours=settings.TCA_CONFIRMATION_EXPIRATION_HOURS)
+
+    def confirm(self):
+        """
+        Perform the confirmation of the associated :class:`PublicKey`
+
+        This method permanently deletes the :class:`PublicKeyConfirmation`
+        instance it is invoked upon.
+        """
+        self.public_key.active = True
+        self.public_key.save()
+
+        self.delete()
 
 
 @python_2_unicode_compatible

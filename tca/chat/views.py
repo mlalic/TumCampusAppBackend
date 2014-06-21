@@ -1,17 +1,24 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 
+from django.http import Http404
+
 from rest_framework import viewsets
 from rest_framework import status
 from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.renderers import (
+    TemplateHTMLRenderer,
+    JSONRenderer,
+)
 
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
 from chat.models import PublicKey
+from chat.models import PublicKeyConfirmation
 from chat.serializers import MemberSerializer
 from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
@@ -92,6 +99,12 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         """
         public_key.member = self._member_parent_instance()
 
+    def post_save(self, public_key, *args, **kwargs):
+        """
+        Implement the hook method to initate the email confirmation of the
+        new key.
+        """
+        hooks.confirm_new_key(public_key)
 
 
 class RegistrationIdViewMixin(object):
@@ -205,3 +218,36 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
         # For now the signature is validated completely synchronously to
         # the request.
         hooks.validate_message_signature(message)
+
+
+class PublicKeyConfirmationView(APIView):
+    """
+    View providing the option for confirming a public key by knowing
+    a confirmation key associated to it.
+
+    The view is rendered to HTML unless a '.json' extension is specified
+    in the URL.
+    """
+    renderer_classes = (
+        TemplateHTMLRenderer,
+        JSONRenderer,
+    )
+
+    template_name = 'confirmation-success.html'
+
+    def get(self, request, confirmation_key, format=None):
+        confirmation = get_object_or_404(
+            PublicKeyConfirmation, confirmation_key=confirmation_key)
+
+        if confirmation.is_expired():
+            # Expired confirmations don't count
+            confirmation.delete()
+            raise Http404
+
+        public_key = confirmation.public_key
+        confirmation.confirm()
+
+        return Response({
+            'public_key_text': public_key.key_text,
+            'url': public_key.get_absolute_url(),
+        })

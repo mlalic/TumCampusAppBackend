@@ -1,15 +1,21 @@
 from django.test import TestCase
+from django.test.utils import override_settings
 
 from django.core.urlresolvers import reverse
+
+from django.utils import timezone
+
 from urllib import urlencode
 
 import json
 import mock
+import datetime
 
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
 from chat.models import PublicKey
+from chat.models import PublicKeyConfirmation
 
 from .factories import MemberFactory
 from .factories import MessageFactory
@@ -385,7 +391,8 @@ class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
         MemberFactory.create_batch(5)
         self.member = MemberFactory.create()
 
-    def test_create_public_key(self):
+    @mock.patch('chat.views.hooks.confirm_new_key')
+    def test_create_public_key(self, mock_confirm):
         # Even though the text doesn't really represent a valid RSA key
         # it is enough to test the service endpoint's correctness
         key_text = 'asdf'
@@ -401,6 +408,8 @@ class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(pubkey.key_text, key_text)
         # Associated to the correct member?
         self.assertEquals(pubkey.member.pk, self.member.pk)
+        # Ran the hook to confirm the key
+        mock_confirm.assert_called_once_with(pubkey)
         # -- Correct response?
         # The status code indicates a created resource
         self.assertEquals(201, response.status_code)
@@ -618,3 +627,150 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         }, member_id=self.member.pk + 5)
 
         self.assertEquals(404, response.status_code)
+
+
+class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for the view which is used to confirm the validity of a
+    public key.
+    """
+    view_name = 'confirmation-view'
+
+    def setUp(self):
+        self.members = MemberFactory.create_batch(5)
+        self.member = self.members[1]
+
+        self.dummy_key_text = 'dummy-key-text'
+        self.public_key = self.member.public_keys.create(
+            key_text=self.dummy_key_text)
+        # Get a canonical now-time for public key confirmations
+        self.now = timezone.now()
+
+    def set_up_confirmation(self, public_key):
+        """
+        Helper method which sets up a PublicKeyConfirmation instance for
+        the given public key.
+        """
+        return PublicKeyConfirmation.objects.create(public_key=public_key)
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    def test_confirm_key(self):
+        """
+        Tests that confirming an existing key works as expected.
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(confirmation_key=confirmation.confirmation_key)
+
+        # Correct response?
+        self.assertEquals(200, response.status_code)
+        self.assertIn('text/html', response['Content-Type'])
+        # Rendered the correct template?
+        self.assertTemplateUsed(response, 'confirmation-success.html')
+        self.assertEquals(
+            self.public_key.key_text,
+            response.context['public_key_text'])
+        self.assertTrue(response.context['url'].endswith(
+            self.public_key.get_absolute_url()))
+        self.assertContains(response, self.public_key.key_text)
+        # Correct actions?
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # The public key is enabled
+        # (reload the PK from the database first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertTrue(self.public_key.active)
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    def test_non_existent_confirmation_key(self):
+        """
+        Tests the view when a non-exitent confirmation key is passed to it
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+
+        response = self.get(confirmation_key='this-key-does-not-exist')
+
+        self.assertEquals(404, response.status_code)
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    def test_public_key_removed(self):
+        """
+        Tests the view when the public key associated to the confirmation
+        was removed in the mean time.
+        """
+        # Set up a confirmation
+        confirmation = self.set_up_confirmation(self.public_key)
+        # But now delete the PK
+        self.public_key.delete()
+
+        response = self.get(confirmation_key=confirmation.confirmation_key)
+
+        # Resource not found
+        self.assertEquals(404, response.status_code)
+        # The confirmation is also removed automatically
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    def test_response_json(self):
+        """
+        Test that the view can return a JSON response.
+        """
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(
+            confirmation_key=confirmation.confirmation_key,
+            format='json')
+
+        # Correct response?
+        self.assertEquals(200, response.status_code)
+        self.assertIn('application/json', response['Content-Type'])
+        # Correctly rendered?
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            self.public_key.key_text,
+            response_content['public_key_text'])
+        self.assertTrue(response_content['url'].endswith(
+            self.public_key.get_absolute_url()))
+        # Correct actions?
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # The public key is enabled
+        # (reload the PK from the database first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertTrue(self.public_key.active)
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    @mock.patch('chat.models.timezone.now')
+    def test_expired_key(self, mock_now):
+        """
+        Tests that the public key is not confirmed when the confirmation
+        key has expired in the mean time.
+        """
+        mock_now.return_value = self.now
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Rewind time forward to expire the confirmation
+        mock_now.return_value = self.now + datetime.timedelta(hours=3)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(
+            confirmation_key=confirmation.confirmation_key)
+
+        self.assertEquals(404, response.status_code)
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # ...but the public key is not active
+        # (reload it first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertFalse(self.public_key.active)
