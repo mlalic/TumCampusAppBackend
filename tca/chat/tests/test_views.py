@@ -1,10 +1,15 @@
 from django.test import TestCase
+from django.test.utils import override_settings
 
 from django.core.urlresolvers import reverse
+
+from django.utils import timezone
+
 from urllib import urlencode
 
 import json
 import mock
+import datetime
 
 from chat.models import Member
 from chat.models import Message
@@ -635,6 +640,8 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         self.dummy_key_text = 'dummy-key-text'
         self.public_key = self.member.public_keys.create(
             key_text=self.dummy_key_text)
+        # Get a canonical now-time for public key confirmations
+        self.now = timezone.now()
 
     def set_up_confirmation(self, public_key):
         """
@@ -643,6 +650,7 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         """
         return PublicKeyConfirmation.objects.create(public_key=public_key)
 
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
     def test_confirm_key(self):
         """
         Tests that confirming an existing key works as expected.
@@ -674,6 +682,7 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
         self.assertTrue(self.public_key.active)
 
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
     def test_non_existent_confirmation_key(self):
         """
         Tests the view when a non-exitent confirmation key is passed to it
@@ -685,6 +694,7 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(404, response.status_code)
         self.assertEquals(1, PublicKeyConfirmation.objects.count())
 
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
     def test_public_key_removed(self):
         """
         Tests the view when the public key associated to the confirmation
@@ -702,6 +712,7 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         # The confirmation is also removed automatically
         self.assertEquals(0, PublicKeyConfirmation.objects.count())
 
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
     def test_response_json(self):
         """
         Test that the view can return a JSON response.
@@ -733,3 +744,30 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         # (reload the PK from the database first)
         self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
         self.assertTrue(self.public_key.active)
+
+    @override_settings(TCA_CONFIRMATION_EXPIRATION_HOURS=2)
+    @mock.patch('chat.models.timezone.now')
+    def test_expired_key(self, mock_now):
+        """
+        Tests that the public key is not confirmed when the confirmation
+        key has expired in the mean time.
+        """
+        mock_now.return_value = self.now
+        confirmation = self.set_up_confirmation(self.public_key)
+        # Rewind time forward to expire the confirmation
+        mock_now.return_value = self.now + datetime.timedelta(hours=3)
+        # Sanity check: a confirmation exists
+        self.assertEquals(1, PublicKeyConfirmation.objects.count())
+        # Sanity check: the public key is not active
+        self.assertFalse(self.public_key.active)
+
+        response = self.get(
+            confirmation_key=confirmation.confirmation_key)
+
+        self.assertEquals(404, response.status_code)
+        # The confirmation is removed
+        self.assertEquals(0, PublicKeyConfirmation.objects.count())
+        # ...but the public key is not active
+        # (reload it first)
+        self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
+        self.assertFalse(self.public_key.active)

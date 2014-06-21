@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 
+from django.http import Http404
+
 from rest_framework import viewsets
 from rest_framework import status
 from rest_framework import mixins
@@ -230,6 +232,12 @@ class PublicKeyConfirmationView(APIView):
     def get(self, request, confirmation_key, format=None):
         confirmation = get_object_or_404(
             PublicKeyConfirmation, confirmation_key=confirmation_key)
+
+        if confirmation.is_expired():
+            # Expired confirmations don't count
+            confirmation.delete()
+            raise Http404
+
         public_key = confirmation.public_key
         confirmation.confirm()
 
