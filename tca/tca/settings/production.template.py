@@ -10,6 +10,9 @@ a symlink to it from a ``local_settings.py`` file, i.e.::
     settings/local_settings.py -> settings/production.py
 """
 
+#: DEBUG should never be set to True in production
+DEBUG = False
+
 #: Make sure to provide a real celery broker
 # BROKER_URL = 'amqp://guest:guest@localhost//'
 
