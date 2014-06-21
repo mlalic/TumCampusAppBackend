@@ -1,0 +1,16 @@
+Dear user,
+
+A request to add a new public key associated to your account has been
+issued.
+
+In order to confirm your new public key visit the following URL:
+
+  {{ confirmation_url }}
+
+For your reference, the public key which would be added is:
+
+{{ confirmation.public_key.key_text }}
+
+
+Kind regards,
+TCA Team

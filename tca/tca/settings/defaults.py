@@ -95,3 +95,10 @@ CELERY_RESULT_SERIALIZER = 'json'
 #: The number of hours after which a PublicKey confirmation key will
 #: expire.
 TCA_CONFIRMATION_EXPIRATION_HOURS = 1
+
+#: The email address to be used in the From field of emails sent by the
+#: TCA system.
+TCA_FROM_EMAIL = 'noreply@tca'
+
+#: Whether the send emails to confirm the validity of users' public keys
+TCA_ENABLE_EMAIL_CONFIRMATIONS = True

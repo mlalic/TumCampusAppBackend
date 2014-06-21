@@ -89,6 +89,11 @@ class PublicKeyConfirmation(models.Model):
     def __str__(self):
         return self.confirmation_key
 
+    def get_absolute_url(self):
+        return reverse('confirmation-view', kwargs={
+            'confirmation_key': self.confirmation_key,
+        })
+
     def is_expired(self):
         """
         Method checks whether the confirmation has expired.
