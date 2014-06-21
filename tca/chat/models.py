@@ -9,6 +9,9 @@ from jsonfield import JSONField
 
 from chat import crypto
 
+import random
+import string
+
 
 @python_2_unicode_compatible
 class Member(models.Model):
@@ -53,6 +56,33 @@ class PublicKey(models.Model):
             'member': self.member.pk,
             'pk': self.pk,
         })
+
+
+def _random_string(length=30):
+    """
+    Generates a random string of alphanumeric characters.
+    """
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(random.choice(alphabet) for _ in xrange(length))
+
+
+@python_2_unicode_compatible
+class PublicKeyConfirmation(models.Model):
+    """
+    Model providing a confirmation key for an uploaded public key.
+
+    Before a public key is made active, it is necessary for the user to
+    confirm it by providing the confirmation key which gets sent to his
+    LRZ email address.
+    """
+    confirmation_key = models.CharField(
+        default=_random_string,
+        max_length=30,
+        unique=True)
+    public_key = models.ForeignKey(PublicKey)
+
+    def __str__(self):
+        return self.confirmation_key
 
 
 @python_2_unicode_compatible
