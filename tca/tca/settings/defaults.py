@@ -91,3 +91,7 @@ BROKER_URL = 'amqp://guest:guest@localhost//'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+
+#: The number of hours after which a PublicKey confirmation key will
+#: expire.
+TCA_CONFIRMATION_EXPIRATION_HOURS = 1

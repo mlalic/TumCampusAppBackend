@@ -2,8 +2,10 @@ from __future__ import unicode_literals
 
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
+from django.utils import timezone
 
 from django.core.urlresolvers import reverse
+from django.conf import settings
 
 from jsonfield import JSONField
 
@@ -11,6 +13,7 @@ from chat import crypto
 
 import random
 import string
+import datetime
 
 
 @python_2_unicode_compatible
@@ -81,9 +84,18 @@ class PublicKeyConfirmation(models.Model):
         max_length=30,
         unique=True)
     public_key = models.ForeignKey(PublicKey)
+    created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.confirmation_key
+
+    def is_expired(self):
+        """
+        Method checks whether the confirmation has expired.
+        """
+        delta = timezone.now() - self.created
+        return delta > datetime.timedelta(
+            hours=settings.TCA_CONFIRMATION_EXPIRATION_HOURS)
 
     def confirm(self):
         """
