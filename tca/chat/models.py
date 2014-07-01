@@ -19,8 +19,7 @@ import datetime
 @python_2_unicode_compatible
 class Member(models.Model):
     lrz_id = models.CharField(max_length=7, unique=True)
-    first_name = models.CharField(max_length=30, blank=True)
-    last_name = models.CharField(max_length=30, blank=True)
+    display_name = models.CharField(max_length=150, blank=True)
     registration_ids = JSONField(default=())
 
     def __str__(self):

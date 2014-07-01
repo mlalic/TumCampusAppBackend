@@ -43,8 +43,7 @@ class MemberFactory(factory.DjangoModelFactory):
     FACTORY_FOR = Member
 
     lrz_id = factory.fuzzy.FuzzyText(length=7)
-    first_name = factory.fuzzy.FuzzyText()
-    last_name = factory.fuzzy.FuzzyText()
+    display_name = factory.fuzzy.FuzzyText()
 
 
 class PublicKeyFactory(factory.DjangoModelFactory):

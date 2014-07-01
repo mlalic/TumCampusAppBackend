@@ -96,8 +96,7 @@ class MemberListViewTestCase(ViewTestCaseMixin, TestCase):
     # Relevant fields of the Member model
     FIELDS = (
         'lrz_id',
-        'first_name',
-        'last_name',
+        'display_name',
     )
 
     def extract_member_fields(self, member, exclude=None):
