@@ -482,6 +482,8 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(
             registration_id,
             self.member.registration_ids[0])
+        # The validation was initiated
+        mock_validate.assert_called_once_with()
     
     @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
     def test_add_registration_id_existing(self, mock_validate):
@@ -604,6 +606,8 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         expected_list = self.initial_ids[:]
         expected_list.remove(registration_id)
         self.assertListEqual(expected_list, self.member.registration_ids)
+        # The validation was initiated
+        mock_validate.assert_called_once_with()
     
     @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
     def test_registration_id_non_existent(self, mock_validate):
