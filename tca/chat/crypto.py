@@ -17,6 +17,9 @@ def verify(message, signature, public_key):
     :param public_key: The public key to validate against, represented as
         a base64 encoded bytearray
     """
+    if message is None:
+        return False
+
     message = message.encode('utf-8')
 
     try:

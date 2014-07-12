@@ -122,3 +122,45 @@ class VerifySignatureTestCase(TestCase):
             'asd')
 
         self.assertFalse(result)
+
+    def test_message_is_none(self):
+        """
+        Tests that when the message parameter is ``None``, the message
+        is not considered valid.
+        """
+        message = self.message_fixtures['unicode-korean']
+
+        result = crypto.verify(
+                None,
+                message['signature'],
+                self.public_key)
+
+        self.assertFalse(result)
+
+    def test_signature_is_none(self):
+        """
+        Tests that when the signature parameter is ``None``, the message
+        is not considered valid.
+        """
+        message = self.message_fixtures['unicode-korean']
+
+        result = crypto.verify(
+                message['text'],
+                None,
+                self.public_key)
+
+        self.assertFalse(result)
+
+    def test_public_key_is_none(self):
+        """
+        Tests that when the public_key parameter is ``None``, the message
+        is not considered valid.
+        """
+        message = self.message_fixtures['unicode-korean']
+
+        result = crypto.verify(
+                message['text'],
+                message['signature'],
+                None)
+
+        self.assertFalse(result)
