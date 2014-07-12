@@ -193,9 +193,9 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         hooks.confirm_new_key(public_key)
 
 
-class RegistrationIdViewMixin(object):
+class RegistrationIdAPIView(APIView):
     """
-    A mixin providing methods for views which handle registration IDs.
+    A base class for endpoints which will handle registration IDs.
 
     Registration IDs are essentially identifiers of the user's Android
     devices.
@@ -231,14 +231,14 @@ class RegistrationIdViewMixin(object):
         })
 
 
-class AddRegistrationIdView(RegistrationIdViewMixin, APIView):
+class AddRegistrationIdView(RegistrationIdAPIView):
     def process(self):
         self.member.registration_ids.append(self.get_registration_id())
 
         self.member.save()
 
 
-class RemoveRegistrationIdView(RegistrationIdViewMixin, APIView):
+class RemoveRegistrationIdView(RegistrationIdAPIView):
     def process(self):
         try:
             self.member.registration_ids.remove(self.get_registration_id())
