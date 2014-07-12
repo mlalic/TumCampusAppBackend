@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
+from django.utils.functional import cached_property
 
 from django.http import Http404
 
@@ -204,7 +205,8 @@ class RegistrationIdViewMixin(object):
 
     HTTP_422_UNPROCESSABLE_ENTITY = 422
 
-    def get_member(self):
+    @cached_property
+    def member(self):
         """
         Obtain a :class:`chat.models.Member` instance for the particular
         request.
@@ -231,24 +233,22 @@ class RegistrationIdViewMixin(object):
 
 class AddRegistrationIdView(RegistrationIdViewMixin, APIView):
     def process(self):
-        member = self.get_member()
-        member.registration_ids.append(self.get_registration_id())
+        self.member.registration_ids.append(self.get_registration_id())
 
-        member.save()
+        self.member.save()
 
 
 class RemoveRegistrationIdView(RegistrationIdViewMixin, APIView):
     def process(self):
-        member = self.get_member()
         try:
-            member.registration_ids.remove(self.get_registration_id())
+            self.member.registration_ids.remove(self.get_registration_id())
         except ValueError:
             # No such registration ID
             # No need to do anything special, just swallow the exception
             pass
         else:
             # If there was something removed, update the member
-            member.save()
+            self.member.save()
 
 
 class ChatRoomViewSet(
