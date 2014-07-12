@@ -14,6 +14,8 @@ from rest_framework.renderers import (
     JSONRenderer,
 )
 
+from chat import crypto
+
 from chat.models import Member
 from chat.models import Message
 from chat.models import SystemMessage
@@ -56,6 +58,55 @@ class FilteredModelViewSetMixin(object):
                 })
 
         return qs
+
+
+class SignatureValidationAPIViewMixin(object):
+    """
+    A mixin providing signature validation functionality.
+    """
+    signature_field = 'signature'
+    message_field = 'message'
+
+    def get_signature(self):
+        """
+        Method should return the signature which is to be validated.
+        By default, returns the field of the request payload with the
+        name :attr:`signature_field`.
+        """
+        return self.request.DATA.get(self.signature_field, None)
+
+    def get_public_keys(self):
+        """
+        Returns a list of public keys which are to be matched against
+        the signature. If at least one of the keys is found to match
+        the signature, it will be considered valid.
+        """
+        return []
+
+    def get_message_to_validate(self):
+        """
+        Returns the message which will be validated against the signature
+        returned by :meth:`get_public_keys`.
+        By default returns the field of the request payload with the
+        name :attr:`message_field`.
+        """
+        return self.request.DATA.get(self.message_field, None)
+
+    def validate_signature(self):
+        """
+        Method performs the validation of the signature based on the
+        parameters of the Mixin.
+        """
+        message = self.get_message_to_validate()
+        signature = self.get_signature()
+
+        if not message or not signature:
+            return False
+
+        return any(
+            crypto.verify(message, signature, key)
+            for key in self.get_public_keys()
+        )
 
 
 class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
