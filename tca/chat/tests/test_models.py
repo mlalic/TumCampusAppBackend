@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from chat.models import Member
 from chat.models import Message
+from chat.models import SystemMessage
 from chat.models import ChatRoom
 from chat.models import PublicKey
 from chat.models import PublicKeyConfirmation
@@ -241,3 +242,178 @@ class PublicKeyConfirmationTestCase(TestCase):
         # Just after the edge -- expired
         self.offset_now(datetime.timedelta(hours=2, seconds=1))
         self.assertTrue(self.confirmation.is_expired())
+
+
+class SystemMessageTestCase(TestCase):
+    """
+    Tests for the :class:`chat.models.SystemMessage` model.
+    """
+    def setUp(self):
+        self.chat_room = ChatRoomFactory()
+
+    def set_up_system_message(self, text=None, auto_save=False):
+        """
+        Helper method which returns a :class:`chat.models.SystemMessage`
+        instance.
+
+        :param text: The text of the message to be created.
+            If the ``text`` parameter is not provided, a placeholder text
+            is used instead.
+
+        :param auto_save: A boolean indicating whether the message should
+            already be saved by the method.
+        """
+        if text is None:
+            text = "System message text"
+
+        message = SystemMessage(text=text, chat_room=self.chat_room)
+        if auto_save:
+            message.save()
+
+        return message
+
+    def test_get_bot_user(self):
+        """
+        Tests the ``get_bot_user`` method creates a bot user
+        """
+        bot = SystemMessage.get_bot_user()
+
+        self.assertEquals("Bot", bot.display_name)
+        self.assertEquals("bot", bot.lrz_id)
+        self.assertEquals(1, Member.objects.count())
+
+    def test_bot_user_auto_created(self):
+        """
+        Tests that the bot user is automatically created when it doesn't
+        already exist prior to creating a :class:`chat.models.SystemMessage`
+        """
+        # Sanity check -- the bot does not exist
+        self.assertEquals(0, Member.objects.count())
+
+        self.set_up_system_message(auto_save=True)
+
+        # The bot now exists?
+        self.assertEquals(1, Member.objects.count())
+        bot = Member.objects.all()[0]
+        self.assertEquals("Bot", bot.display_name)
+        # It is also the same object as returned by the get_bot_user?
+        self.assertEquals(SystemMessage.get_bot_user(), bot)
+
+    def test_system_message_auto_valid(self):
+        """
+        Tests that a :class:`chat.models.SystemMessage` is always created
+        as a valid message.
+        """
+        msg = self.set_up_system_message()
+
+        # The message is valid before even saving it?
+        self.assertTrue(msg.valid)
+
+    def test_system_message_valid_on_save(self):
+        """
+        Tests that a :class:`chat.models.SystemMessage` is valid after
+        being saved, regardless of what the valid field indicated before
+        """
+        msg = self.set_up_system_message()
+        msg.valid = False
+
+        msg.save()
+
+        self.assertTrue(msg.valid)
+        # Reload the message from the database and check again
+        msg = SystemMessage.objects.all()[0]
+        self.assertTrue(msg.valid)
+
+    def test_system_message_auto_from_bot(self):
+        """
+        Tests that a system message is always created with the bot user.
+        """
+        msg = self.set_up_system_message()
+
+        self.assertEquals(SystemMessage.get_bot_user(), msg.member)
+
+    def test_system_message_from_bot_on_save(self):
+        """
+        Tests that a system message is always registered as being created
+        by the system bot.
+        """
+        msg = self.set_up_system_message()
+        msg.member = MemberFactory()
+
+        msg.save()
+
+        self.assertEquals(SystemMessage.get_bot_user(), msg.member)
+        # Reload the message from the database and make sure it is by the bot
+        msg = Message.objects.all()[0]
+        self.assertEquals(SystemMessage.get_bot_user(), msg.member)
+
+
+class SystemMessageManagerTestCase(TestCase):
+    """
+    Tests for the :class:`chat.models.SystemMessageManager` manager.
+    """
+    def setUp(self):
+        self.chat_room = ChatRoomFactory()
+        self.member = MemberFactory()
+
+    def get_member_joined_text(self, member=None):
+        """
+        A helper method returning a string which should be emitted when
+        a member joins a chat room. This way, if the message should
+        ever change, the test will also need to change in only one
+        place.
+
+        :param member: The member for which the message should be
+            generated.  If left ``None``, the returned message will be
+            for the ``self.member`` instance.
+        """
+        if member is None:
+            member = self.member
+
+        return "{member} has joined the chat room.".format(member=member)
+
+    def get_member_left_text(self, member=None):
+        """
+        A helper method returning a string which should be emitted when
+        a member leaves a chat room. This way, if the message should
+        ever change, the test will also need to change in only one
+        place.
+
+        :param member: The member for which the message should be
+            generated.  If left ``None``, the returned message will be
+            for the ``self.member`` instance.
+        """
+        if member is None:
+            member = self.member
+
+        return "{member} has left the chat room.".format(member=member)
+
+    def test_create_member_joined_notification(self):
+        """
+        Tests the manager method for creating notifications that a member
+        has joined a chat room.
+        """
+        message = SystemMessage.objects.create_member_joined(
+            self.member, self.chat_room)
+
+        # Message is a system message?
+        self.assertEquals(SystemMessage.get_bot_user(), message.member)
+        # Correct text generated?
+        self.assertEquals(self.get_member_joined_text(), message.text)
+        # In the correct chat room?
+        self.assertEquals(self.chat_room, message.chat_room)
+
+    def test_create_member_left_notification(self):
+        """
+        Tests the manager method for creating notifications that a member
+        has left a chat room.
+        """
+        message = SystemMessage.objects.create_member_left(
+            self.member, self.chat_room)
+
+        # Message is a system message?
+        self.assertEquals(SystemMessage.get_bot_user(), message.member)
+        # Correct text generated?
+        self.assertEquals(self.get_member_left_text(), message.text)
+        # In the correct chat room?
+        self.assertEquals(self.chat_room, message.chat_room)

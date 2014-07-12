@@ -16,6 +16,7 @@ from rest_framework.renderers import (
 
 from chat.models import Member
 from chat.models import Message
+from chat.models import SystemMessage
 from chat.models import ChatRoom
 from chat.models import PublicKey
 from chat.models import PublicKeyConfirmation
@@ -178,6 +179,8 @@ class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
 
         member = get_object_or_404(Member, lrz_id=request.DATA['lrz_id'])
         chat_room.members.add(member)
+        # Member joined notification...
+        SystemMessage.objects.create_member_joined(member, chat_room)
 
         return Response({
             'status': 'success',

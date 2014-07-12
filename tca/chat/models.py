@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils import timezone
+from django.utils.functional import cached_property
 
 from django.core.urlresolvers import reverse
 from django.conf import settings
@@ -184,3 +185,110 @@ class Message(models.Model):
                 self.valid = False
                 self.save()
             return False
+
+
+class SystemMessageManager(models.Manager):
+    """
+    A custom manager for the :class:`SystemMessage` model.
+
+    Provides additional convenience method for creating the most common
+    system-level messages.
+    """
+    def create_member_joined(self, member, chat_room):
+        """
+        A method which creates a new :class:`SystemMessage` indicating
+        that a new user has joined a chat room.
+
+        :param member: a :class:`Member` instance of the member that has
+            joined the chat room
+        :param chat_room: a :class:`ChatRoom` instance to which the member
+            has joined
+        """
+        text = "{member} has joined the chat room.".format(member=member)
+        return self.create(text=text, chat_room=chat_room)
+
+    def create_member_left(self, member, chat_room):
+        """
+        A method which creates a new :class:`SystemMessage` indicating
+        that a user has left a chat room.
+
+        :param member: a :class:`Member` instance of the member that has
+            left the chat room.
+        :param chat_room: a :class:`ChatRoom` instance which the member
+            just left.
+        """
+        text = "{member} has left the chat room.".format(member=member)
+        return self.create(text=text, chat_room=chat_room)
+
+
+class SystemMessage(Message):
+    """
+    A proxy class of the :class:`Message` model which represents status
+    messages which can be emitted by the system into a chat room.
+
+    Examples of status messages are the user joined/left notifications.
+    """
+    _bot_description = {
+        "display_name": "Bot",
+        "lrz_id": "bot",
+    }
+
+    def __init__(self, *args, **kwargs):
+        """
+        Overrides the default initialization method in order to put
+        a default value for the valid field.
+
+        System messages are always valid, no matter that they do not have
+        an associated signature.
+        """
+        super(SystemMessage, self).__init__(*args, **kwargs)
+        self.set_default_values()
+
+    #: Override the default manager
+    objects = SystemMessageManager()
+
+    class Meta:
+        proxy = True
+
+    def set_default_values(self):
+        """
+        Method puts the default values which a :class:`SystemMessage`
+        should have.
+
+        This includes making the message always valid, as well as having
+        the linked member be the system's "Bot".
+        """
+        self.valid = True
+        self.member = self.bot_user
+
+    @cached_property
+    def bot_user(self):
+        """
+        A property caching the result of :classmeth:`get_bot_user` for
+        a particular instance. This is done to make sure the database
+        is not queried multiple times for a single :class:`SystemMessage`
+        instance in order to find the Bot user.
+        """
+        return self.get_bot_user()
+
+    @classmethod
+    def get_bot_user(cls):
+        """
+        Method returns the :class:`Member` instance which represents the
+        `bot' that posts status messages.
+
+        It is a classmethod since the bot user is associated with all
+        :class:`SystemMessage` instances.
+        """
+        bot, _ = Member.objects.get_or_create(**cls._bot_description)
+        return bot
+
+    def save(self, *args, **kwargs):
+        """
+        A custom implementation of the ``save`` method which overrides the
+        member field to signify that the message was emitted by the system.
+        """
+        # The member and valid field cannot deviate from their defaults!
+        self.set_default_values()
+        # Now let the super save method handle saving the model
+        super(SystemMessage, self).save(*args, **kwargs)
