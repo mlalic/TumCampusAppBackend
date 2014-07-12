@@ -773,3 +773,60 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         # (reload it first)
         self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
         self.assertFalse(self.public_key.active)
+
+
+class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests the endpoint for users joining a chat room.
+    """
+    view_name = "chatroom-add-member"
+
+    def setUp(self):
+        self.member = MemberFactory()
+        self.chat_room = ChatRoomFactory()
+
+    @mock.patch('chat.views.SystemMessage')
+    def test_member_join(self, mock_system_message):
+        """
+        Tests that an existing member can join the chat room.
+        """
+        # Sanity check -- no members in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # Sanity check -- no messages in the chat room
+        self.assertEquals(0, self.chat_room.messages.count())
+
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Now there is a member in the chat room
+        self.assertEquals(1, self.chat_room.members.count())
+        # The correct member has joined?
+        member = self.chat_room.members.all()[0]
+        self.assertEquals(member, self.member)
+        # A system message was generated for the chat room?
+        mock_create = mock_system_message.objects.create_member_joined
+        mock_create.assert_called_once_with(self.member, self.chat_room)
+
+        # Correct response generated?
+        self.assertEquals('application/json', response['Content-Type'])
+        self.assertEquals(200, response.status_code)
+
+    @mock.patch('chat.views.SystemMessage')
+    def test_non_existent_lrz_id(self, mock_system_message):
+        """
+        Tests that when a non-existent lrz_id is given to the endpoint
+        there are no actions taken
+        """
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id + 'a',
+        }, pk=self.chat_room.pk)
+
+        # No one is still in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # It didn't attempt to create any status message?
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # Correct status code?
+        self.assertEquals(404, response.status_code)
