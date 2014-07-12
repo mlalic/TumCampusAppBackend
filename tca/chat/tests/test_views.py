@@ -962,6 +962,52 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
 
     @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
     @mock.patch('chat.views.SystemMessage')
+    def test_lrz_id_missing(self, mock_system_message, mock_validate):
+        """
+        Test that when an lrz_id is missing in the request, it is
+        considered invalid.
+        """
+        # No valid key in the request
+        response = self.post_json({
+            'asdf': 'asdf',
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # No member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_json_body(self, mock_system_message, mock_validate):
+        """
+        Tests that when an invalid JSON body is provided, the endpoint
+        returns an appropriate response.
+        """
+        # No valid JSON!
+        response = self.post(
+            "Definitely not valid JSON", pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # No member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
     def test_non_existent_lrz_id(self, mock_system_message, mock_validate):
         """
         Tests that when a non-existent lrz_id is given to the endpoint
