@@ -109,6 +109,39 @@ class SignatureValidationAPIViewMixin(object):
         )
 
 
+class MemberBasedSignatureValidationMixin(SignatureValidationAPIViewMixin):
+    """
+    A subclass of the :class:`SignatureValidationAPIViewMixin` providing
+    implementations for the methods when it is expected that the validation
+    is performed based on a :class:`chat.models.Member` instance.
+
+    The mixin assumes there is a ``member`` field on the ``self`` instance.
+    """
+
+    #: For member based validation, expect a signature field in the body
+    #: of the request
+    signature_field = 'signature'
+
+    def get_message_to_validate(self):
+        """
+        Implement the method of the mixin to provide the message that is
+        supposed to be signed for this request.
+
+        In this case, it is simply the lrz_id of the member.
+        """
+        return self.member.lrz_id
+
+    def get_public_keys(self):
+        """
+        Return the public keys which are to be used to try and validate
+        the requests.
+        """
+        return [
+            pubkey.key_text
+            for pubkey in self.member.public_keys.filter(active=True)
+        ]
+
+
 class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = Member
     serializer_class = MemberSerializer

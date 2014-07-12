@@ -11,6 +11,8 @@ import json
 import mock
 import datetime
 
+from chat.views import MemberBasedSignatureValidationMixin
+
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
@@ -773,6 +775,144 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         # (reload it first)
         self.public_key = PublicKey.objects.get(pk=self.public_key.pk)
         self.assertFalse(self.public_key.active)
+
+
+class MemberBasedValidationTestCase(TestCase):
+    """
+    Tests the :class:`MemberBasedSignatureValidationMixin`.
+    """
+    class MockRequest(object):
+        """
+        A very simple class to mock a request object that the mixin
+        expects.
+
+        There is no need to use a RequestFactory or anything of the
+        sort for something this simple.
+        """
+        DATA = {}
+
+    def setUp(self):
+        self.mixin_instance = MemberBasedSignatureValidationMixin()
+        # Attach a member instance to the mixin
+        self.member = MemberFactory()
+        self.mixin_instance.member = self.member
+        # Attach a mock request to the mixin
+        self.mixin_instance.request = self.MockRequest()
+        self.stub_signature = 'This is a signature'
+        self.mixin_instance.request.DATA = {
+            'signature': self.stub_signature,
+        }
+        # Make sure the member has some active public keys
+        self.active_keys = PublicKeyFactory.create_batch(
+            2, member=self.member, active=True)
+        # Make sure the member has some inactive public keys
+        self.inactive_keys = PublicKeyFactory.create_batch(
+            2, member=self.member, active=False)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_all_invalid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when none of the public keys associated to
+        the user yield a valid signature.
+        """
+        # All validation attempts will be futile
+        mock_verify.return_value = False
+
+        result = self.mixin_instance.validate_signature()
+
+        # The result says that the message validation has failed
+        self.assertFalse(result)
+        # The mock was called for each valid public key
+        self.assertEquals(
+            len(self.active_keys),
+            mock_verify.call_count)
+        # Check that the calls were indeed for the valid keys
+        for pubkey in self.active_keys:
+            mock_verify.assert_any_call(
+                self.member.lrz_id,
+                self.stub_signature,
+                pubkey.key_text)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_no_signature_in_request(self, mock_verify):
+        """
+        Make sure that a request is not considered valid if it doesn't
+        even contain an appropriate signature field in the first place.
+        """
+        # Remove the signature field from the request
+        del self.mixin_instance.request.DATA['signature']
+        # It still does not consider it valid, even if the crypto.verify
+        # would misbehave for None-values
+        mock_verify.return_value = True
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertFalse(result)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_last_valid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when only the last of the public keys associated to
+        the user yields a valid signature.
+        """
+        # Set up the return value so that the last public key yields
+        # a correct signature
+        return_values = [False] * len(self.active_keys)
+        return_values[-1] = True
+        mock_verify.side_effect = return_values
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertTrue(result)
+        # The mock was still called for each valid public key
+        self.assertEquals(
+            len(self.active_keys),
+            mock_verify.call_count)
+        # Check that the calls were indeed for the valid keys
+        for pubkey in self.active_keys:
+            mock_verify.assert_any_call(
+                self.member.lrz_id,
+                self.stub_signature,
+                pubkey.key_text)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_first_valid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when the first of the public keys associated to
+        the user yields a valid signature.
+        """
+        # The first attempt to verify will already be true
+        mock_verify.return_value = True
+
+        result = self.mixin_instance.validate_signature()
+
+        # The result says that the message validation has failed
+        self.assertTrue(result)
+        # The mock was called only once -- for the first valid key
+        pubkey = self.active_keys[0]
+        mock_verify.called_once_with(
+            self.member.lrz_id,
+            self.stub_signature,
+            pubkey.key_text)
+
+    def test_no_active_keys(self):
+        """
+        Tests that when there are no active public keys associated to
+        the user, the message is not considered valid.
+        """
+        # Remove the active keys
+        self.member.public_keys.filter(active=True).delete()
+        # Sanity-check -- all public keys are no inactive
+        self.assertTrue(self.member.public_keys.count() > 0)
+        for pubkey in self.member.public_keys.all():
+            self.assertFalse(pubkey.active)
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertFalse(result)
 
 
 class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
