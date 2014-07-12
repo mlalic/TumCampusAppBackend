@@ -249,7 +249,17 @@ class RemoveRegistrationIdView(RegistrationIdViewMixin, APIView):
         else:
             # If there was something removed, update the member
             member.save()
-class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
+
+
+class ChatRoomViewSet(
+        FilteredModelViewSetMixin,
+        MemberBasedSignatureValidationMixin,
+        viewsets.ModelViewSet):
+    """
+    ViewSet defining operations for the :class:`chat.models.ChatRoom`
+    model.
+    """
+
     model = ChatRoom
     serializer_class = ChatRoomSerializer
     filter_fields = ('name',)
@@ -257,18 +267,28 @@ class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     @action()
     def add_member(self, request, pk=None):
         chat_room = self.get_object()
-        if 'lrz_id' not in request.DATA:
+        mandatory_fields = ('lrz_id', 'signature',)
+        if not all(field in request.DATA for field in mandatory_fields):
             # Invalid request
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        member = get_object_or_404(Member, lrz_id=request.DATA['lrz_id'])
-        chat_room.members.add(member)
-        # Member joined notification...
-        SystemMessage.objects.create_member_joined(member, chat_room)
+        self.member = get_object_or_404(
+            Member, lrz_id=request.DATA['lrz_id'])
+
+        if self.validate_signature():
+            chat_room.members.add(self.member)
+            # Member joined notification...
+            SystemMessage.objects.create_member_joined(self.member, chat_room)
+            return_status = 'success'
+            status_code = status.HTTP_200_OK
+        else:
+            return_status = 'invalid signature'
+            # Permission denied
+            status_code = status.HTTP_403_FORBIDDEN
 
         return Response({
-            'status': 'success',
-        })
+            'status': return_status,
+        }, status=status_code)
 
 
 class ChatMessageViewSet(viewsets.ModelViewSet):

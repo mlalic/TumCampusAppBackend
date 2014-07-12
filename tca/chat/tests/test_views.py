@@ -925,8 +925,9 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         self.member = MemberFactory()
         self.chat_room = ChatRoomFactory()
 
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
     @mock.patch('chat.views.SystemMessage')
-    def test_member_join(self, mock_system_message):
+    def test_member_join(self, mock_system_message, mock_validate):
         """
         Tests that an existing member can join the chat room.
         """
@@ -934,9 +935,13 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(0, self.chat_room.members.count())
         # Sanity check -- no messages in the chat room
         self.assertEquals(0, self.chat_room.messages.count())
+        # The mock considers the signature of this message as valid
+        mock_validate.return_value = True
 
+        signature = 'This is a signature.'
         response = self.post_json({
             'lrz_id': self.member.lrz_id,
+            'signature': signature,
         }, pk=self.chat_room.pk)
 
         # Correct actions taken?
@@ -948,19 +953,25 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         # A system message was generated for the chat room?
         mock_create = mock_system_message.objects.create_member_joined
         mock_create.assert_called_once_with(self.member, self.chat_room)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
 
         # Correct response generated?
         self.assertEquals('application/json', response['Content-Type'])
         self.assertEquals(200, response.status_code)
 
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
     @mock.patch('chat.views.SystemMessage')
-    def test_non_existent_lrz_id(self, mock_system_message):
+    def test_non_existent_lrz_id(self, mock_system_message, mock_validate):
         """
         Tests that when a non-existent lrz_id is given to the endpoint
         there are no actions taken
         """
+        signature = 'Signature'
+
         response = self.post_json({
             'lrz_id': self.member.lrz_id + 'a',
+            'signature': signature,
         }, pk=self.chat_room.pk)
 
         # No one is still in the chat room
@@ -968,5 +979,67 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         # It didn't attempt to create any status message?
         mock_create = mock_system_message.objects.create_member_joined
         self.assertFalse(mock_create.called)
+        # It didn't attempt to verify anything
+        self.assertFalse(mock_validate.called)
         # Correct status code?
         self.assertEquals(404, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_signature(self, mock_system_message, mock_validate):
+        """
+        Tests that when the request's signature is invalid, the user is not
+        added to the chat room.
+        """
+        # Sanity check -- no members in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # Sanity check -- no messages in the chat room
+        self.assertEquals(0, self.chat_room.messages.count())
+        # Consider the signature as invalid
+        mock_validate.return_value = False
+
+        signature = 'This is a signature.'
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+            'signature': signature,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still no member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
+
+        # Correct response generated?
+        self.assertEquals('application/json', response['Content-Type'])
+        # Forbidden response status code
+        self.assertEquals(403, response.status_code)
+        self.assertEquals(
+            'invalid signature',
+            json.loads(response.content)['status'])
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_signature_missing(self, mock_system_message, mock_validate):
+        """
+        Tests the view when the signature field is missing.
+        """
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still no member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system did not try verifying the message signature
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        # Invalid request response status code
+        self.assertEquals(400, response.status_code)
