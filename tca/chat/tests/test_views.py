@@ -460,15 +460,18 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         """
         self.member = Member.objects.get(pk=self.member.pk)
 
-    def test_add_registration_id(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_add_registration_id(self, mock_validate):
         """
         Tests that adding a registration ID works correctly when the
         existing member has no registration IDs associated.
         """
         registration_id = 'kfds43vb'
+        mock_validate.return_value = True
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -480,11 +483,13 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
             registration_id,
             self.member.registration_ids[0])
     
-    def test_add_registration_id_existing(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_add_registration_id_existing(self, mock_validate):
         """
         Tests that adding a registration ID to a Member with some IDs
         already associated to it works correctly
         """
+        mock_validate.return_value = True
         initial_ids = ["asdf", "bdsa"]
         self.member.registration_ids = initial_ids
         self.member.save()
@@ -495,6 +500,7 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         new_id = "thisisanewid"
         response = self.post_json({
             'registration_id': new_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -535,6 +541,26 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
 
         self.assertEquals(404, response.status_code)
 
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_invalid_signature(self, mock_validate):
+        """
+        Test that a registration id is added if the signature is found to
+        be invalid.
+        """
+        mock_validate.return_value = False
+        registration_id = 'kfds43vb'
+
+        response = self.post_json({
+            'registration_id': registration_id,
+            'signature': 'asdf',
+        }, member_id=self.member.pk)
+
+        # Forbidden
+        self.assertEquals(403, response.status_code)
+        self.reload_member()
+        # Registration ID not in the list?
+        self.assertEquals(0, len(self.member.registration_ids))
+
 
 class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
     """
@@ -558,14 +584,17 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         """
         self.member = Member.objects.get(pk=self.member.pk)
 
-    def test_remove_registration_id(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_remove_registration_id(self, mock_validate):
         """
         Tests that removing a registration ID works correctly.
         """
+        mock_validate.return_value = True
         registration_id = self.initial_ids[0]
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -576,11 +605,13 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         expected_list.remove(registration_id)
         self.assertListEqual(expected_list, self.member.registration_ids)
     
-    def test_registration_id_non_existent(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_registration_id_non_existent(self, mock_validate):
         """
         Tests that trying to remove a registration ID which is not
         associated to a particular member does not cause any errors.
         """
+        mock_validate.return_value = True
         registration_id = 'id-not-in-initial-list'
         # Sanity check
         self.assertNotIn(registration_id, self.initial_ids,
@@ -588,6 +619,7 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -628,6 +660,29 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         }, member_id=self.member.pk + 5)
 
         self.assertEquals(404, response.status_code)
+
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_invalid_signature(self, mock_validate):
+        """
+        Tests that the registration id is not removed if
+        the signature is found to be invalid.
+        """
+        mock_validate.return_value = False
+        registration_id = self.initial_ids[0]
+
+        response = self.post_json({
+            'registration_id': registration_id,
+            'signature': 'asdf',
+        }, member_id=self.member.pk)
+
+        # Forbidden status code
+        self.assertEquals(403, response.status_code)
+        self.reload_member()
+        # Registration ID still in the list?
+        self.assertIn(registration_id, self.member.registration_ids)
+        # No changes from the initial list?
+        expected_list = self.initial_ids[:]
+        self.assertListEqual(expected_list, self.member.registration_ids)
 
 
 class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):

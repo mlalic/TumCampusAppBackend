@@ -193,7 +193,7 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         hooks.confirm_new_key(public_key)
 
 
-class RegistrationIdAPIView(APIView):
+class RegistrationIdAPIView(MemberBasedSignatureValidationMixin, APIView):
     """
     A base class for endpoints which will handle registration IDs.
 
@@ -223,6 +223,11 @@ class RegistrationIdAPIView(APIView):
         # Validate the request
         if 'registration_id' not in self.request.DATA:
             return Response("", status=self.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        if not self.validate_signature():
+            return Response({
+                'status': 'invalid signature',
+            }, status=status.HTTP_403_FORBIDDEN)
 
         self.process()
 
