@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
+from django.utils.functional import cached_property
 
 from django.http import Http404
 
@@ -13,6 +14,8 @@ from rest_framework.renderers import (
     TemplateHTMLRenderer,
     JSONRenderer,
 )
+
+from chat import crypto
 
 from chat.models import Member
 from chat.models import Message
@@ -56,6 +59,88 @@ class FilteredModelViewSetMixin(object):
                 })
 
         return qs
+
+
+class SignatureValidationAPIViewMixin(object):
+    """
+    A mixin providing signature validation functionality.
+    """
+    signature_field = 'signature'
+    message_field = 'message'
+
+    def get_signature(self):
+        """
+        Method should return the signature which is to be validated.
+        By default, returns the field of the request payload with the
+        name :attr:`signature_field`.
+        """
+        return self.request.DATA.get(self.signature_field, None)
+
+    def get_public_keys(self):
+        """
+        Returns a list of public keys which are to be matched against
+        the signature. If at least one of the keys is found to match
+        the signature, it will be considered valid.
+        """
+        return []
+
+    def get_message_to_validate(self):
+        """
+        Returns the message which will be validated against the signature
+        returned by :meth:`get_public_keys`.
+        By default returns the field of the request payload with the
+        name :attr:`message_field`.
+        """
+        return self.request.DATA.get(self.message_field, None)
+
+    def validate_signature(self):
+        """
+        Method performs the validation of the signature based on the
+        parameters of the Mixin.
+        """
+        message = self.get_message_to_validate()
+        signature = self.get_signature()
+
+        if not message or not signature:
+            return False
+
+        return any(
+            crypto.verify(message, signature, key)
+            for key in self.get_public_keys()
+        )
+
+
+class MemberBasedSignatureValidationMixin(SignatureValidationAPIViewMixin):
+    """
+    A subclass of the :class:`SignatureValidationAPIViewMixin` providing
+    implementations for the methods when it is expected that the validation
+    is performed based on a :class:`chat.models.Member` instance.
+
+    The mixin assumes there is a ``member`` field on the ``self`` instance.
+    """
+
+    #: For member based validation, expect a signature field in the body
+    #: of the request
+    signature_field = 'signature'
+
+    def get_message_to_validate(self):
+        """
+        Implement the method of the mixin to provide the message that is
+        supposed to be signed for this request.
+
+        In this case, it is simply the lrz_id of the member.
+        """
+        return self.member.lrz_id
+
+    def get_public_keys(self):
+        """
+        Return the public keys which are to be used to try and validate
+        the requests.
+        """
+        return [
+            pubkey.key_text
+            for pubkey in self.member.public_keys.filter(active=True)
+        ]
 
 
 class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
@@ -108,9 +193,9 @@ class PublicKeyViewSet(mixins.CreateModelMixin,
         hooks.confirm_new_key(public_key)
 
 
-class RegistrationIdViewMixin(object):
+class RegistrationIdAPIView(MemberBasedSignatureValidationMixin, APIView):
     """
-    A mixin providing methods for views which handle registration IDs.
+    A base class for endpoints which will handle registration IDs.
 
     Registration IDs are essentially identifiers of the user's Android
     devices.
@@ -120,7 +205,8 @@ class RegistrationIdViewMixin(object):
 
     HTTP_422_UNPROCESSABLE_ENTITY = 422
 
-    def get_member(self):
+    @cached_property
+    def member(self):
         """
         Obtain a :class:`chat.models.Member` instance for the particular
         request.
@@ -138,6 +224,11 @@ class RegistrationIdViewMixin(object):
         if 'registration_id' not in self.request.DATA:
             return Response("", status=self.HTTP_422_UNPROCESSABLE_ENTITY)
 
+        if not self.validate_signature():
+            return Response({
+                'status': 'invalid signature',
+            }, status=status.HTTP_403_FORBIDDEN)
+
         self.process()
 
         return Response({
@@ -145,27 +236,35 @@ class RegistrationIdViewMixin(object):
         })
 
 
-class AddRegistrationIdView(RegistrationIdViewMixin, APIView):
+class AddRegistrationIdView(RegistrationIdAPIView):
     def process(self):
-        member = self.get_member()
-        member.registration_ids.append(self.get_registration_id())
+        self.member.registration_ids.append(self.get_registration_id())
 
-        member.save()
+        self.member.save()
 
 
-class RemoveRegistrationIdView(RegistrationIdViewMixin, APIView):
+class RemoveRegistrationIdView(RegistrationIdAPIView):
     def process(self):
-        member = self.get_member()
         try:
-            member.registration_ids.remove(self.get_registration_id())
+            self.member.registration_ids.remove(self.get_registration_id())
         except ValueError:
             # No such registration ID
             # No need to do anything special, just swallow the exception
             pass
         else:
             # If there was something removed, update the member
-            member.save()
-class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
+            self.member.save()
+
+
+class ChatRoomViewSet(
+        FilteredModelViewSetMixin,
+        MemberBasedSignatureValidationMixin,
+        viewsets.ModelViewSet):
+    """
+    ViewSet defining operations for the :class:`chat.models.ChatRoom`
+    model.
+    """
+
     model = ChatRoom
     serializer_class = ChatRoomSerializer
     filter_fields = ('name',)
@@ -173,18 +272,28 @@ class ChatRoomViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     @action()
     def add_member(self, request, pk=None):
         chat_room = self.get_object()
-        if 'lrz_id' not in request.DATA:
+        mandatory_fields = ('lrz_id', 'signature',)
+        if not all(field in request.DATA for field in mandatory_fields):
             # Invalid request
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        member = get_object_or_404(Member, lrz_id=request.DATA['lrz_id'])
-        chat_room.members.add(member)
-        # Member joined notification...
-        SystemMessage.objects.create_member_joined(member, chat_room)
+        self.member = get_object_or_404(
+            Member, lrz_id=request.DATA['lrz_id'])
+
+        if self.validate_signature():
+            chat_room.members.add(self.member)
+            # Member joined notification...
+            SystemMessage.objects.create_member_joined(self.member, chat_room)
+            return_status = 'success'
+            status_code = status.HTTP_200_OK
+        else:
+            return_status = 'invalid signature'
+            # Permission denied
+            status_code = status.HTTP_403_FORBIDDEN
 
         return Response({
-            'status': 'success',
-        })
+            'status': return_status,
+        }, status=status_code)
 
 
 class ChatMessageViewSet(viewsets.ModelViewSet):

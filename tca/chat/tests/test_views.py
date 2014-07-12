@@ -11,6 +11,8 @@ import json
 import mock
 import datetime
 
+from chat.views import MemberBasedSignatureValidationMixin
+
 from chat.models import Member
 from chat.models import Message
 from chat.models import ChatRoom
@@ -458,15 +460,18 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         """
         self.member = Member.objects.get(pk=self.member.pk)
 
-    def test_add_registration_id(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_add_registration_id(self, mock_validate):
         """
         Tests that adding a registration ID works correctly when the
         existing member has no registration IDs associated.
         """
         registration_id = 'kfds43vb'
+        mock_validate.return_value = True
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -478,11 +483,13 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
             registration_id,
             self.member.registration_ids[0])
     
-    def test_add_registration_id_existing(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_add_registration_id_existing(self, mock_validate):
         """
         Tests that adding a registration ID to a Member with some IDs
         already associated to it works correctly
         """
+        mock_validate.return_value = True
         initial_ids = ["asdf", "bdsa"]
         self.member.registration_ids = initial_ids
         self.member.save()
@@ -493,6 +500,7 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         new_id = "thisisanewid"
         response = self.post_json({
             'registration_id': new_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -533,6 +541,26 @@ class AddRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
 
         self.assertEquals(404, response.status_code)
 
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_invalid_signature(self, mock_validate):
+        """
+        Test that a registration id is added if the signature is found to
+        be invalid.
+        """
+        mock_validate.return_value = False
+        registration_id = 'kfds43vb'
+
+        response = self.post_json({
+            'registration_id': registration_id,
+            'signature': 'asdf',
+        }, member_id=self.member.pk)
+
+        # Forbidden
+        self.assertEquals(403, response.status_code)
+        self.reload_member()
+        # Registration ID not in the list?
+        self.assertEquals(0, len(self.member.registration_ids))
+
 
 class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
     """
@@ -556,14 +584,17 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         """
         self.member = Member.objects.get(pk=self.member.pk)
 
-    def test_remove_registration_id(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_remove_registration_id(self, mock_validate):
         """
         Tests that removing a registration ID works correctly.
         """
+        mock_validate.return_value = True
         registration_id = self.initial_ids[0]
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -574,11 +605,13 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         expected_list.remove(registration_id)
         self.assertListEqual(expected_list, self.member.registration_ids)
     
-    def test_registration_id_non_existent(self):
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_registration_id_non_existent(self, mock_validate):
         """
         Tests that trying to remove a registration ID which is not
         associated to a particular member does not cause any errors.
         """
+        mock_validate.return_value = True
         registration_id = 'id-not-in-initial-list'
         # Sanity check
         self.assertNotIn(registration_id, self.initial_ids,
@@ -586,6 +619,7 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
 
         response = self.post_json({
             'registration_id': registration_id,
+            'signature': 'asdf',
         }, member_id=self.member.pk)
 
         self.assertEquals(200, response.status_code)
@@ -626,6 +660,29 @@ class RemoveRegistrationIdTestCase(ViewTestCaseMixin, TestCase):
         }, member_id=self.member.pk + 5)
 
         self.assertEquals(404, response.status_code)
+
+    @mock.patch('chat.views.RegistrationIdAPIView.validate_signature')
+    def test_invalid_signature(self, mock_validate):
+        """
+        Tests that the registration id is not removed if
+        the signature is found to be invalid.
+        """
+        mock_validate.return_value = False
+        registration_id = self.initial_ids[0]
+
+        response = self.post_json({
+            'registration_id': registration_id,
+            'signature': 'asdf',
+        }, member_id=self.member.pk)
+
+        # Forbidden status code
+        self.assertEquals(403, response.status_code)
+        self.reload_member()
+        # Registration ID still in the list?
+        self.assertIn(registration_id, self.member.registration_ids)
+        # No changes from the initial list?
+        expected_list = self.initial_ids[:]
+        self.assertListEqual(expected_list, self.member.registration_ids)
 
 
 class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
@@ -775,6 +832,144 @@ class PublicKeyConfirmationViewTestCase(ViewTestCaseMixin, TestCase):
         self.assertFalse(self.public_key.active)
 
 
+class MemberBasedValidationTestCase(TestCase):
+    """
+    Tests the :class:`MemberBasedSignatureValidationMixin`.
+    """
+    class MockRequest(object):
+        """
+        A very simple class to mock a request object that the mixin
+        expects.
+
+        There is no need to use a RequestFactory or anything of the
+        sort for something this simple.
+        """
+        DATA = {}
+
+    def setUp(self):
+        self.mixin_instance = MemberBasedSignatureValidationMixin()
+        # Attach a member instance to the mixin
+        self.member = MemberFactory()
+        self.mixin_instance.member = self.member
+        # Attach a mock request to the mixin
+        self.mixin_instance.request = self.MockRequest()
+        self.stub_signature = 'This is a signature'
+        self.mixin_instance.request.DATA = {
+            'signature': self.stub_signature,
+        }
+        # Make sure the member has some active public keys
+        self.active_keys = PublicKeyFactory.create_batch(
+            2, member=self.member, active=True)
+        # Make sure the member has some inactive public keys
+        self.inactive_keys = PublicKeyFactory.create_batch(
+            2, member=self.member, active=False)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_all_invalid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when none of the public keys associated to
+        the user yield a valid signature.
+        """
+        # All validation attempts will be futile
+        mock_verify.return_value = False
+
+        result = self.mixin_instance.validate_signature()
+
+        # The result says that the message validation has failed
+        self.assertFalse(result)
+        # The mock was called for each valid public key
+        self.assertEquals(
+            len(self.active_keys),
+            mock_verify.call_count)
+        # Check that the calls were indeed for the valid keys
+        for pubkey in self.active_keys:
+            mock_verify.assert_any_call(
+                self.member.lrz_id,
+                self.stub_signature,
+                pubkey.key_text)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_no_signature_in_request(self, mock_verify):
+        """
+        Make sure that a request is not considered valid if it doesn't
+        even contain an appropriate signature field in the first place.
+        """
+        # Remove the signature field from the request
+        del self.mixin_instance.request.DATA['signature']
+        # It still does not consider it valid, even if the crypto.verify
+        # would misbehave for None-values
+        mock_verify.return_value = True
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertFalse(result)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_last_valid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when only the last of the public keys associated to
+        the user yields a valid signature.
+        """
+        # Set up the return value so that the last public key yields
+        # a correct signature
+        return_values = [False] * len(self.active_keys)
+        return_values[-1] = True
+        mock_verify.side_effect = return_values
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertTrue(result)
+        # The mock was still called for each valid public key
+        self.assertEquals(
+            len(self.active_keys),
+            mock_verify.call_count)
+        # Check that the calls were indeed for the valid keys
+        for pubkey in self.active_keys:
+            mock_verify.assert_any_call(
+                self.member.lrz_id,
+                self.stub_signature,
+                pubkey.key_text)
+
+    @mock.patch('chat.views.crypto.verify')
+    def test_validate_signature_first_valid(self, mock_verify):
+        """
+        Tests that the mixin's ``validate_signature`` method performs
+        the correct steps when the first of the public keys associated to
+        the user yields a valid signature.
+        """
+        # The first attempt to verify will already be true
+        mock_verify.return_value = True
+
+        result = self.mixin_instance.validate_signature()
+
+        # The result says that the message validation has failed
+        self.assertTrue(result)
+        # The mock was called only once -- for the first valid key
+        pubkey = self.active_keys[0]
+        mock_verify.called_once_with(
+            self.member.lrz_id,
+            self.stub_signature,
+            pubkey.key_text)
+
+    def test_no_active_keys(self):
+        """
+        Tests that when there are no active public keys associated to
+        the user, the message is not considered valid.
+        """
+        # Remove the active keys
+        self.member.public_keys.filter(active=True).delete()
+        # Sanity-check -- all public keys are no inactive
+        self.assertTrue(self.member.public_keys.count() > 0)
+        for pubkey in self.member.public_keys.all():
+            self.assertFalse(pubkey.active)
+
+        result = self.mixin_instance.validate_signature()
+
+        self.assertFalse(result)
+
+
 class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
     """
     Tests the endpoint for users joining a chat room.
@@ -785,8 +980,9 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         self.member = MemberFactory()
         self.chat_room = ChatRoomFactory()
 
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
     @mock.patch('chat.views.SystemMessage')
-    def test_member_join(self, mock_system_message):
+    def test_member_join(self, mock_system_message, mock_validate):
         """
         Tests that an existing member can join the chat room.
         """
@@ -794,9 +990,13 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(0, self.chat_room.members.count())
         # Sanity check -- no messages in the chat room
         self.assertEquals(0, self.chat_room.messages.count())
+        # The mock considers the signature of this message as valid
+        mock_validate.return_value = True
 
+        signature = 'This is a signature.'
         response = self.post_json({
             'lrz_id': self.member.lrz_id,
+            'signature': signature,
         }, pk=self.chat_room.pk)
 
         # Correct actions taken?
@@ -808,19 +1008,71 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         # A system message was generated for the chat room?
         mock_create = mock_system_message.objects.create_member_joined
         mock_create.assert_called_once_with(self.member, self.chat_room)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
 
         # Correct response generated?
         self.assertEquals('application/json', response['Content-Type'])
         self.assertEquals(200, response.status_code)
 
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
     @mock.patch('chat.views.SystemMessage')
-    def test_non_existent_lrz_id(self, mock_system_message):
+    def test_lrz_id_missing(self, mock_system_message, mock_validate):
+        """
+        Test that when an lrz_id is missing in the request, it is
+        considered invalid.
+        """
+        # No valid key in the request
+        response = self.post_json({
+            'asdf': 'asdf',
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # No member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_json_body(self, mock_system_message, mock_validate):
+        """
+        Tests that when an invalid JSON body is provided, the endpoint
+        returns an appropriate response.
+        """
+        # No valid JSON!
+        response = self.post(
+            "Definitely not valid JSON", pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # No member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_non_existent_lrz_id(self, mock_system_message, mock_validate):
         """
         Tests that when a non-existent lrz_id is given to the endpoint
         there are no actions taken
         """
+        signature = 'Signature'
+
         response = self.post_json({
             'lrz_id': self.member.lrz_id + 'a',
+            'signature': signature,
         }, pk=self.chat_room.pk)
 
         # No one is still in the chat room
@@ -828,5 +1080,67 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         # It didn't attempt to create any status message?
         mock_create = mock_system_message.objects.create_member_joined
         self.assertFalse(mock_create.called)
+        # It didn't attempt to verify anything
+        self.assertFalse(mock_validate.called)
         # Correct status code?
         self.assertEquals(404, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_signature(self, mock_system_message, mock_validate):
+        """
+        Tests that when the request's signature is invalid, the user is not
+        added to the chat room.
+        """
+        # Sanity check -- no members in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # Sanity check -- no messages in the chat room
+        self.assertEquals(0, self.chat_room.messages.count())
+        # Consider the signature as invalid
+        mock_validate.return_value = False
+
+        signature = 'This is a signature.'
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+            'signature': signature,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still no member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
+
+        # Correct response generated?
+        self.assertEquals('application/json', response['Content-Type'])
+        # Forbidden response status code
+        self.assertEquals(403, response.status_code)
+        self.assertEquals(
+            'invalid signature',
+            json.loads(response.content)['status'])
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_signature_missing(self, mock_system_message, mock_validate):
+        """
+        Tests the view when the signature field is missing.
+        """
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still no member in the chat room
+        self.assertEquals(0, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system did not try verifying the message signature
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        # Invalid request response status code
+        self.assertEquals(400, response.status_code)
