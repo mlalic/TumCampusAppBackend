@@ -187,6 +187,40 @@ class Message(models.Model):
             return False
 
 
+class SystemMessageManager(models.Manager):
+    """
+    A custom manager for the :class:`SystemMessage` model.
+
+    Provides additional convenience method for creating the most common
+    system-level messages.
+    """
+    def create_member_joined(self, member, chat_room):
+        """
+        A method which creates a new :class:`SystemMessage` indicating
+        that a new user has joined a chat room.
+
+        :param member: a :class:`Member` instance of the member that has
+            joined the chat room
+        :param chat_room: a :class:`ChatRoom` instance to which the member
+            has joined
+        """
+        text = "{member} has joined the chat room.".format(member=member)
+        return self.create(text=text, chat_room=chat_room)
+
+    def create_member_left(self, member, chat_room):
+        """
+        A method which creates a new :class:`SystemMessage` indicating
+        that a user has left a chat room.
+
+        :param member: a :class:`Member` instance of the member that has
+            left the chat room.
+        :param chat_room: a :class:`ChatRoom` instance which the member
+            just left.
+        """
+        text = "{member} has left the chat room.".format(member=member)
+        return self.create(text=text, chat_room=chat_room)
+
+
 class SystemMessage(Message):
     """
     A proxy class of the :class:`Message` model which represents status
@@ -209,6 +243,9 @@ class SystemMessage(Message):
         """
         super(SystemMessage, self).__init__(*args, **kwargs)
         self.set_default_values()
+
+    #: Override the default manager
+    objects = SystemMessageManager()
 
     class Meta:
         proxy = True
