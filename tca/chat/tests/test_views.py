@@ -1148,3 +1148,181 @@ class JoinChatRoomTestCase(ViewTestCaseMixin, TestCase):
         # Correct response generated?
         # Invalid request response status code
         self.assertEquals(400, response.status_code)
+
+
+class LeaveChatRoomTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests the endpoint for users leaving a chat room.
+    """
+    view_name = "chatroom-remove-member"
+
+    def setUp(self):
+        self.member = MemberFactory()
+        self.chat_room = ChatRoomFactory()
+        # Make sure the member is initially in the chat room
+        self.chat_room.members.add(self.member)
+        # Add an extra member to the chat room
+        self.chat_room.members.add(MemberFactory())
+        self.initial_count = self.chat_room.members.count()
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_member_leave(self, mock_system_message, mock_validate):
+        """
+        Tests that an existing member can leave the chat room.
+        """
+        # The mock considers the signature of this message as valid
+        mock_validate.return_value = True
+        # Sanity check -- member in the chat room
+        self.assertIn(self.member, self.chat_room.members.all())
+
+        signature = 'This is a signature.'
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+            'signature': signature,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # The member is gone from the chat room
+        self.assertNotIn(self.member, self.chat_room.members.all())
+        # Only one less member
+        self.assertEquals(
+            self.initial_count - 1,
+            self.chat_room.members.count())
+        # A system message was generated for the chat room?
+        mock_create = mock_system_message.objects.create_member_left
+        mock_create.assert_called_once_with(self.member, self.chat_room)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
+
+        # Correct response generated?
+        self.assertEquals('application/json', response['Content-Type'])
+        self.assertEquals(200, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_lrz_id_missing(self, mock_system_message, mock_validate):
+        """
+        Test that when an lrz_id is missing in the request, it is
+        considered invalid.
+        """
+        # No valid key in the request
+        response = self.post_json({
+            'asdf': 'asdf',
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still the same count of members
+        self.assertEquals(self.initial_count, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_json_body(self, mock_system_message, mock_validate):
+        """
+        Tests that when an invalid JSON body is provided, the endpoint
+        returns an appropriate response.
+        """
+        # No valid JSON!
+        response = self.post(
+            "Definitely not valid JSON", pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Still the same count of members
+        self.assertEquals(self.initial_count, self.chat_room.members.count())
+        # No system message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system didn't try verifying anything
+        self.assertFalse(mock_validate.called)
+        # Correct response generated?
+        self.assertEquals(400, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_non_existent_lrz_id(self, mock_system_message, mock_validate):
+        """
+        Tests that when a non-existent lrz_id is given to the endpoint
+        there are no actions taken
+        """
+        signature = 'Signature'
+
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id + 'a',
+            'signature': signature,
+        }, pk=self.chat_room.pk)
+
+        # Still the same count of members
+        self.assertEquals(self.initial_count, self.chat_room.members.count())
+        # It didn't attempt to create any status message?
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # It didn't attempt to verify anything
+        self.assertFalse(mock_validate.called)
+        # Correct status code?
+        self.assertEquals(404, response.status_code)
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_invalid_signature(self, mock_system_message, mock_validate):
+        """
+        Tests that when the request's signature is invalid, the user is not
+        removed from the chat room.
+        """
+        # Consider the signature as invalid
+        mock_validate.return_value = False
+        # Sanity check -- the member is in the chat room
+        self.assertIn(self.member, self.chat_room.members.all())
+
+        signature = 'This is a signature.'
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+            'signature': signature,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Member still in the chat room
+        self.assertEquals(self.initial_count, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system tried verifying the message signature
+        mock_validate.assert_called_once_with()
+
+        # Correct response generated?
+        self.assertEquals('application/json', response['Content-Type'])
+        # Forbidden response status code
+        self.assertEquals(403, response.status_code)
+        self.assertEquals(
+            'invalid signature',
+            json.loads(response.content)['status'])
+
+    @mock.patch('chat.views.ChatRoomViewSet.validate_signature')
+    @mock.patch('chat.views.SystemMessage')
+    def test_signature_missing(self, mock_system_message, mock_validate):
+        """
+        Tests the view when the signature field is missing.
+        """
+        response = self.post_json({
+            'lrz_id': self.member.lrz_id,
+        }, pk=self.chat_room.pk)
+
+        # Correct actions taken?
+        # Same count of members
+        self.assertEquals(self.initial_count, self.chat_room.members.count())
+        # No message generated
+        mock_create = mock_system_message.objects.create_member_joined
+        self.assertFalse(mock_create.called)
+        # The system did not try verifying the message signature
+        self.assertFalse(mock_validate.called)
+
+        # Correct response generated?
+        # Invalid request response status code
+        self.assertEquals(400, response.status_code)
