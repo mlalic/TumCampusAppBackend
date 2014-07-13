@@ -143,6 +143,39 @@ class MemberBasedSignatureValidationMixin(SignatureValidationAPIViewMixin):
         ]
 
 
+class MultiSerializerViewSetMixin(object):
+    """
+    Mixin for the DRF ViewSet providing the ability to choose a different
+    serializer based on the view action.
+
+    Classes mixing it in need to provide the ``serializer_classes``
+    dictionary mapping an action to a serializer class.
+
+    If a particular action does not have a custom serializer attached to it,
+    the mixin delegates the call up the MRO (Method Resolution Order).
+
+    Example usage::
+
+        from rest_framework import viewsets
+
+
+        class ModelViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
+            model = SomeModel
+            #: Provide a default model serializer like usual
+            serializer_class = DefaultModelSerializer
+            #: Provide an overide for the serializer for two actions
+            serializer_classes = {
+                'list': ListModelSerializer,
+                'create': CreateModelSerializer,
+            }
+    """
+    def get_serializer_class(self):
+        if self.action in self.serializer_classes:
+            return self.serializer_classes[self.action]
+
+        return super(MultiSerializerViewSetMixin, self).get_serializer_class()
+
+
 class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
     model = Member
     serializer_class = MemberSerializer
