@@ -386,6 +386,7 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         # All the messages are returned?
         response_content = json.loads(response.content)
         self.assertEquals(message_count, len(response_content))
+        messages = reversed(messages)
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
             self.assertTrue(response_message['url'].endswith(
@@ -429,6 +430,7 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         # Only the valid messages are returned?
         response_content = json.loads(response.content)
         self.assertEquals(message_count, len(response_content))
+        messages = reversed(messages)
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
             self.assertTrue(response_message['url'].endswith(
@@ -466,6 +468,7 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         # Only the invalid messages are returned?
         response_content = json.loads(response.content)
         self.assertEquals(message_count, len(response_content))
+        messages = reversed(messages)
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
             self.assertTrue(response_message['url'].endswith(
@@ -502,6 +505,7 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         # All the messages are returned
         response_content = json.loads(response.content)
         self.assertEquals(message_count, len(response_content))
+        messages = reversed(messages)
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
             self.assertTrue(response_message['url'].endswith(

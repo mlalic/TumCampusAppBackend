@@ -138,6 +138,10 @@ class Message(models.Model):
     signature = models.TextField(blank=True)
     valid = models.BooleanField(default=False)
 
+    class Meta:
+        # Make the default order display the newest messages first
+        ordering = ['-timestamp']
+
     def __str__(self):
         return '{text} ({member})'.format(
             text=self.text,
