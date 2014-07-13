@@ -370,9 +370,15 @@ class ChatRoomViewSet(
         }, status=status_code)
 
 
-class ChatMessageViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
+class ChatMessageViewSet(
+        MultiSerializerViewSetMixin,
+        FilteredModelViewSetMixin,
+        viewsets.ModelViewSet):
+
     model = Message
     chat_room_id_field = 'chat_room'
+
+    filter_fields = ('valid',)
 
     #: The default serializer to be used for the ViewSet
     serializer_class = MessageSerializer
@@ -393,8 +399,8 @@ class ChatMessageViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
         Override the query set to get only the resources which are subordinate
         to the given ChatRoom.
         """
-        return self.model.objects.filter(
-            chat_room=self.kwargs[self.chat_room_id_field])
+        qs = super(ChatMessageViewSet, self).get_queryset()
+        return qs.filter(chat_room=self.kwargs[self.chat_room_id_field])
 
     def pre_save(self, message):
         """

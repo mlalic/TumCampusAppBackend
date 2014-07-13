@@ -393,6 +393,113 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
             self.assertEquals(
                 message.member.display_name, nested_member['display_name'])
 
+    def test_filter_only_valid(self):
+        """
+        Tests that it is possible to filter the list of all messages
+        to display only the valid ones by providing an appropriate
+        query parameter.
+        """
+        # Set up some valid messages to the chat room
+        valid_message_count = 5
+        messages = MessageFactory.create_batch(
+            valid_message_count, chat_room=self.chat_room, valid=True)
+        # Set up some invalid messages to the chat room
+        invalid_message_count = 4
+        MessageFactory.create_batch(
+            invalid_message_count, chat_room=self.chat_room, valid=False)
+        # Total expected message count
+        message_count = valid_message_count
+        # Create some chat messages to a different chat room
+        MessageFactory.create_batch(5,
+                chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
+
+        response = self.get(
+            parameters={
+                'valid': 'true'
+            }, chat_room=self.chat_room.pk)
+
+        # Correct response status code
+        self.assertEquals(200, response.status_code)
+        # Only the valid messages are returned?
+        response_content = json.loads(response.content)
+        self.assertEquals(message_count, len(response_content))
+        for message, response_message in zip(messages, response_content):
+            self.assertEquals(message.text, response_message['text'])
+            self.assertTrue(response_message['url'].endswith(
+                message.get_absolute_url()))
+            self.assertTrue(response_message['valid'])
+
+    def test_filter_only_invalid(self):
+        """
+        Tests that it is possible to filter the list of all messages
+        to display only the invalid ones by providing an appropriate
+        query parameter.
+        """
+        # Set up some valid messages to the chat room
+        valid_message_count = 5
+        MessageFactory.create_batch(
+            valid_message_count, chat_room=self.chat_room, valid=True)
+        # Set up some invalid messages to the chat room
+        invalid_message_count = 4
+        messages = MessageFactory.create_batch(
+            invalid_message_count, chat_room=self.chat_room, valid=False)
+        # Total expected message count
+        message_count = invalid_message_count
+        # Create some chat messages to a different chat room
+        MessageFactory.create_batch(5,
+                chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
+
+        response = self.get(
+            parameters={
+                'valid': 'false'
+            }, chat_room=self.chat_room.pk)
+
+        # Correct response status code
+        self.assertEquals(200, response.status_code)
+        # Only the invalid messages are returned?
+        response_content = json.loads(response.content)
+        self.assertEquals(message_count, len(response_content))
+        for message, response_message in zip(messages, response_content):
+            self.assertEquals(message.text, response_message['text'])
+            self.assertTrue(response_message['url'].endswith(
+                message.get_absolute_url()))
+            self.assertFalse(response_message['valid'])
+
+    def test_filter_ignored(self):
+        """
+        Tests that the filter is ignored if the given value is neither
+        "true" nor "false".
+        """
+        # Set up some valid messages to the chat room
+        valid_message_count = 5
+        messages = MessageFactory.create_batch(
+            valid_message_count, chat_room=self.chat_room, valid=True)
+        # Set up some invalid messages to the chat room
+        invalid_message_count = 4
+        messages += MessageFactory.create_batch(
+            invalid_message_count, chat_room=self.chat_room, valid=False)
+        # Total expected message count
+        message_count = len(messages)
+        # Create some chat messages to a different chat room
+        MessageFactory.create_batch(5,
+                chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
+
+        response = self.get(
+            parameters={
+                'valid': 'invalid value for parameter'
+            }, chat_room=self.chat_room.pk)
+
+        # Correct response status code
+        self.assertEquals(200, response.status_code)
+        # All the messages are returned
+        response_content = json.loads(response.content)
+        self.assertEquals(message_count, len(response_content))
+        for message, response_message in zip(messages, response_content):
+            self.assertEquals(message.text, response_message['text'])
+            self.assertTrue(response_message['url'].endswith(
+                message.get_absolute_url()))
+            self.assertEquals(message.valid, response_message['valid'])
+
 
 class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
     """
