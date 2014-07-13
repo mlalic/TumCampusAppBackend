@@ -105,6 +105,17 @@ class MessageSerializer(MessageSerializerMixin, serializers.HyperlinkedModelSeri
     A serializer for the :class:`chat.models.Message` model.
 
     Treats the :class:`chat.models.Member` instance associated to the
-    message as a hyperlink.
+    message as a hyperlink.  It is suitable for creating new messages.
     """
     url = serializers.SerializerMethodField('get_url')
+
+
+class ListMessageSerializer(MessageSerializerMixin, serializers.ModelSerializer):
+    """
+    A serializer for the :class:`chat.models.Message` model.
+
+    Treats the :class:`chat.models.Member` instance associated to the
+    message as a nested resource.  It is suitable for listing messages.
+    """
+    url = serializers.SerializerMethodField('get_url')
+    member = MemberSerializer()
