@@ -380,8 +380,12 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
             self.assertTrue(response_message['url'].endswith(
                 message.get_absolute_url()))
             self.assertEquals(message.valid, response_message['valid'])
-            self.assertTrue(response_message['member'].endswith(
+            nested_member = response_message['member']
+            self.assertIn('url', nested_member)
+            self.assertTrue(nested_member['url'].endswith(
                 message.member.get_absolute_url()))
+            self.assertEquals(
+                message.member.display_name, nested_member['display_name'])
 
 
 class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):

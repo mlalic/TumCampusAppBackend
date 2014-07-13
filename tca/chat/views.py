@@ -26,6 +26,7 @@ from chat.models import PublicKeyConfirmation
 from chat.serializers import MemberSerializer
 from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
+from chat.serializers import ListMessageSerializer
 from chat.serializers import PublicKeySerializer
 
 from chat import hooks
@@ -355,10 +356,17 @@ class ChatRoomViewSet(
         }, status=status_code)
 
 
-class ChatMessageViewSet(viewsets.ModelViewSet):
+class ChatMessageViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
     model = Message
     chat_room_id_field = 'chat_room'
+
+    #: The default serializer to be used for the ViewSet
     serializer_class = MessageSerializer
+    #: A dictionary of serializers to override the default one depending
+    #: on the action being taken.
+    serializer_classes = {
+        'list': ListMessageSerializer,
+    }
 
     def _chat_room_instance(self):
         """Returns the :class:`models.ChatRoom` instance that is the parent
