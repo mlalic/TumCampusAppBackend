@@ -12,6 +12,7 @@ import mock
 import datetime
 
 from chat.views import MemberBasedSignatureValidationMixin
+from chat.views import ChatMessageViewSet
 
 from chat.models import Member
 from chat.models import Message
@@ -374,7 +375,11 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         MessageFactory.create_batch(5,
                 chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
 
-        response = self.get(chat_room=self.chat_room.pk)
+        # Make sure that the page size is large enough to accomodate
+        # all messages if necessary
+        response = self.get(parameters={
+            'page_size': Message.objects.count(),
+        }, chat_room=self.chat_room.pk)
 
         # Correct response status code
         self.assertEquals(200, response.status_code)
@@ -415,7 +420,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
 
         response = self.get(
             parameters={
-                'valid': 'true'
+                'valid': 'true',
+                'page_size': Message.objects.count(),
             }, chat_room=self.chat_room.pk)
 
         # Correct response status code
@@ -451,7 +457,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
 
         response = self.get(
             parameters={
-                'valid': 'false'
+                'valid': 'false',
+                'page_size': Message.objects.count(),
             }, chat_room=self.chat_room.pk)
 
         # Correct response status code
@@ -486,7 +493,8 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
 
         response = self.get(
             parameters={
-                'valid': 'invalid value for parameter'
+                'valid': 'invalid value for parameter',
+                'page_size': Message.objects.count(),
             }, chat_room=self.chat_room.pk)
 
         # Correct response status code
@@ -499,6 +507,148 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
             self.assertTrue(response_message['url'].endswith(
                 message.get_absolute_url()))
             self.assertEquals(message.valid, response_message['valid'])
+
+
+class MessageListPaginationTestCase(ViewTestCaseMixin, TestCase):
+    """
+    Tests for message list pagination.
+    """
+    view_name = 'message-list'
+
+    def setUp(self):
+        # Random members to fill up the database
+        MemberFactory.create_batch(2)
+        # Member that will be posting messages
+        self.member = MemberFactory.create()
+        # Random chat rooms to fill up the database
+        ChatRoomFactory.create_batch(5)
+        # Chat room to which the test messages will be posted
+        self.chat_room = ChatRoomFactory.create()
+        # Create some messages in the chat room
+        self.messages = MessageFactory.create_batch(
+            2 * ChatMessageViewSet.default_page_size,
+            chat_room=self.chat_room)
+
+    def get(self, page=None, page_size=None):
+        parameters = {}
+        if page is not None:
+            parameters['page'] = page
+        if page_size is not None:
+            parameters['page_size'] = page_size
+
+        return super(MessageListPaginationTestCase, self).get(
+            parameters=parameters, chat_room=self.chat_room.pk)
+
+    def assert_expected_messages(self, response_content, messages):
+        """
+        Helper assertion method which checks that the given messages
+        are found in the response content.
+        """
+        for response_message, message in zip(response_content, messages):
+            self.assertEquals(response_message['id'], message.pk)
+
+    def test_list_default_pagination(self):
+        """
+        Tests that listing the objects without providing any pagination
+        parameters returns a correctly paginated page.
+        """
+        expected_size = ChatMessageViewSet.default_page_size
+
+        response = self.get()
+
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            expected_size,
+            len(response_content))
+        self.assert_expected_messages(
+            response_content,
+            self.chat_room.messages.all()[:expected_size])
+        # Pagination links are found in the Link header?
+        self.assertIn('page=2', response['Link'])
+        self.assertIn('rel="next"', response['Link'])
+        # No previous link on the first page
+        self.assertNotIn('rel="prev"', response['Link'])
+
+    def test_list_override_pagination(self):
+        """
+        Tests that it is possible to override the page size by giving an
+        appropriate parameter.
+        """
+        expected_size = ChatMessageViewSet.default_page_size + 1
+
+        response = self.get(page_size=expected_size)
+
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            expected_size,
+            len(response_content))
+        self.assert_expected_messages(
+            response_content,
+            self.chat_room.messages.all()[:expected_size])
+        # Pagination links are found in the Link header?
+        self.assertIn('page=2', response['Link'])
+        self.assertIn('rel="next"', response['Link'])
+
+    def test_page_size_equal_to_total(self):
+        """
+        Tests that the response is correct when the given page size is
+        equal to the total number of messages.
+        """
+        expected_size = self.chat_room.messages.count()
+
+        response = self.get(page_size=expected_size)
+
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            expected_size,
+            len(response_content))
+        self.assert_expected_messages(
+            response_content,
+            self.chat_room.messages.all()[:expected_size])
+        # No pagination links this time
+        self.assertNotIn('Link', response)
+
+    def test_access_second_page(self):
+        """
+        Tests that it is possible to directly access the second page of
+        the message list.
+        """
+        expected_size = ChatMessageViewSet.default_page_size
+
+        response = self.get(page=2)
+
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            expected_size,
+            len(response_content))
+        self.assert_expected_messages(
+            response_content,
+            self.chat_room.messages.all()[expected_size:])
+        # Next page links are not found -- no next page!
+        self.assertNotIn('page=2', response['Link'])
+        self.assertNotIn('rel="next"', response['Link'])
+        # Pagination links are found in the Link header?
+        self.assertIn('page=1', response['Link'])
+        self.assertIn('rel="prev"', response['Link'])
+
+    def test_empty_page(self):
+        """
+        Tests that requesting a page out of bounds simply returns an empty
+        page.
+        """
+        expected_size = 0
+
+        response = self.get(page=5)
+
+        response_content = json.loads(response.content)
+        self.assertEquals(
+            expected_size,
+            len(response_content))
+        self.assert_expected_messages(
+            response_content,
+            self.chat_room.messages.all()[expected_size:])
+        # The Link header is not even included
+        self.assertNotIn('Link', response)
 
 
 class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):

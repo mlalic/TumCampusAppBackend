@@ -548,7 +548,10 @@ class ChatRoomViewSet(
 class ChatMessageViewSet(
         MultiSerializerViewSetMixin,
         FilteredModelViewSetMixin,
-        viewsets.ModelViewSet):
+        mixins.CreateModelMixin,
+        mixins.RetrieveModelMixin,
+        PaginatedListModelMixin,
+        viewsets.GenericViewSet):
 
     model = Message
     chat_room_id_field = 'chat_room'
