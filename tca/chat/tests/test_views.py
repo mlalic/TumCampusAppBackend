@@ -360,10 +360,16 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         Tests that it is possible to list all existing messages of a chat
         room.
         """
-        # Set up some messages to the chat room
-        message_count = 5
+        # Set up some valid messages to the chat room
+        valid_message_count = 5
         messages = MessageFactory.create_batch(
-            message_count, chat_room=self.chat_room)
+            valid_message_count, chat_room=self.chat_room, valid=True)
+        # Set up some invalid messages to the chat room
+        invalid_message_count = 4
+        messages += MessageFactory.create_batch(
+            invalid_message_count, chat_room=self.chat_room, valid=False)
+        # Total message count
+        message_count = len(messages)
         # Create some chat messages to a different chat room
         MessageFactory.create_batch(5,
                 chat_room=ChatRoom.objects.exclude(pk=self.chat_room.pk)[0])
