@@ -377,6 +377,11 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         self.assertEquals(message_count, len(response_content))
         for message, response_message in zip(messages, response_content):
             self.assertEquals(message.text, response_message['text'])
+            self.assertTrue(response_message['url'].endswith(
+                message.get_absolute_url()))
+            self.assertEquals(message.valid, response_message['valid'])
+            self.assertTrue(response_message['member'].endswith(
+                message.member.get_absolute_url()))
 
 
 class PublicKeyListTestCase(ViewTestCaseMixin, TestCase):
