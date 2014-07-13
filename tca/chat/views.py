@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
+from django.db.models import fields as django_fields
 
 from django.http import Http404
 
@@ -53,10 +54,23 @@ class FilteredModelViewSetMixin(object):
         if self.filter_fields is None:
             return qs
 
-        for filter_field in self.filter_fields:
-            if filter_field in self.request.QUERY_PARAMS:
+        for filter_field_name in self.filter_fields:
+            if filter_field_name in self.request.QUERY_PARAMS:
+                filter_value = self.request.QUERY_PARAMS[filter_field_name]
+
+                # Special casing the value which is passed to the QS
+                # filter method for certain types of fields
+                field = self.model._meta.get_field(filter_field_name)
+                if isinstance(field, django_fields.BooleanField):
+                    filter_value = filter_value.lower()
+                    if filter_value not in ('true', 'false'):
+                        # Ignore the filter if the value is invalid
+                        continue
+
+                    filter_value = filter_value.lower() == 'true'
+
                 qs = qs.filter(**{
-                    filter_field: self.request.QUERY_PARAMS[filter_field]
+                    filter_field_name: filter_value,
                 })
 
         return qs
