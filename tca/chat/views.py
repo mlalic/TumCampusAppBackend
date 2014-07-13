@@ -2,6 +2,10 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.db.models import fields as django_fields
+from django.core.paginator import (
+    Paginator,
+    EmptyPage,
+)
 
 from django.http import Http404
 
@@ -15,6 +19,7 @@ from rest_framework.renderers import (
     TemplateHTMLRenderer,
     JSONRenderer,
 )
+from rest_framework.templatetags.rest_framework import replace_query_param
 
 from chat import crypto
 
@@ -74,6 +79,176 @@ class FilteredModelViewSetMixin(object):
                 })
 
         return qs
+
+
+class PaginatedListModelMixin(object):
+    """
+    A mixin providing seamless pagination of list responses.
+
+    The difference to the behavior of the
+    :class:`rest_framework.mixins.ListModelMixin` is that the pagination
+    links are included in the HTTP ``Link`` header instead of enveloping
+    the results of the endpoint in a JSON object with a "results" field.
+    """
+    default_page_size = 5
+    page_size_parameter = 'page_size'
+    paging_parameter = 'page'
+    paginator_class = Paginator
+
+    def get_page_size(self):
+        """
+        Method returns the size of the page which should be returned.
+
+        The default implementation returns either the size given in the
+        query string parameter named :attr:`page_size_parameter` (if
+        given and a valid integer) or the default size given by the
+        :attr:`default_page_size` property.
+        """
+        page_size = self.default_page_size
+
+        if self.page_size_parameter in self.request.QUERY_PARAMS:
+            try:
+                page_size = int(
+                    self.request.QUERY_PARAMS[self.page_size_parameter])
+            except ValueError:
+                pass
+
+        return page_size
+
+    def get_paginator_instance(self, object_list):
+        """
+        Get a paginator instance which can be used to retrieve pages of
+        objects.
+
+        The paginator instance should be able to provide pages identified
+        by the identifiers being returned by the :meth:`get_page_identifier`
+        method.
+
+        By default, the method constructs a paginator based on the
+        :attr:`paginator_class` property by passing it the given object list
+        and the page size.
+        """
+        return self.paginator_class(object_list, self.get_page_size())
+
+    def get_page_identifier(self):
+        """
+        Return the identifier of the page which should be returned for
+        this request.
+
+        In the default implementation the identifiers are integers
+        representing the page numbers.
+
+        The default implementation returns the value of the query string
+        parameter named ``paging_parameter``.
+
+        If there is no such parameter or it does not have a valid integer
+        value, returns the first page.
+        """
+        page = 1
+
+        if self.paging_parameter in self.request.QUERY_PARAMS:
+            page = self.request.QUERY_PARAMS[self.paging_parameter]
+            try:
+                page = int(page)
+            except ValueError:
+                page = 1
+
+        return page
+
+    def build_page_url(self, page_identifier):
+        """
+        Builds a URL which can be used to access the given page identifer.
+
+        In the general case, the page identifiers do not have to be numbers.
+        """
+        url = self.request.build_absolute_uri()
+        return replace_query_param(url, self.paging_parameter, page_identifier)
+
+    def generate_link(self, rel, page_identifier):
+        """
+        Generates a link for the given page with the given ``rel`` name.
+        """
+        LINK_TEMPLATE = '<{url}>; rel="{rel}"'
+
+        url = self.build_page_url(page_identifier)
+        return LINK_TEMPLATE.format(url=url, rel=rel)
+
+    def add_pagination_links(self, response):
+        """
+        Adds the pagination links already prepared and found in the
+        :attr:`pagination_links` property to the given HttpResponse instance.
+
+        The links are to be found in the ``Link`` HTTP header.
+        """
+        links = ', '.join((
+            self.generate_link(rel, page_number)
+            for rel, page_number in self.pagination_links.items()
+        ))
+
+        if links:
+            # Add the header only if there were some links generated
+            response['Link'] = links
+
+    def set_up_pagination_links(self, page):
+        """
+        Sets up the pagination links which are to be included in the
+        HTTP ``Link`` header.
+
+        The links are based on the given page parameter.
+        """
+        self.pagination_links = {}
+        if page is None:
+            return
+
+        if page.has_next():
+            self.pagination_links['next'] = page.next_page_number()
+        if page.has_previous():
+            self.pagination_links['prev'] = page.previous_page_number()
+
+    def paginate(self, object_list):
+        """
+        Performs the pagination step.
+
+        :param object_list: The list of objects which should be paginated
+
+        :returns: A list of objects which should be returned as a result
+            of the current request.
+        """
+        paginator = self.get_paginator_instance(object_list)
+        pagination_links = {}
+        try:
+            page = paginator.page(self.get_page_identifier())
+        except EmptyPage:
+            results = []
+            page = None
+        else:
+            results = page.object_list
+
+        # After the results for the current request have been found,
+        # prepare the pagination links which will later be added to the
+        # ``Link`` header of the HTTP response
+        self.set_up_pagination_links(page)
+
+        return results
+
+    def list(self, request, *args, **kwargs):
+        """
+        An implementation of the list method which obtains the same
+        object list as the :class:`rest_framework.mixins.ListModelMixin`
+        would, but returns the results paginated in a different manner.
+        """
+        # Keep the same expected behavior as the DRF list mixin would have
+        self.object_list = self.filter_queryset(self.get_queryset())
+        # Get a list of objects to return
+        self.object_list = self.paginate(self.object_list)
+
+        # Now prepare the response content
+        serializer = self.get_serializer(self.object_list, many=True)
+        response = Response(serializer.data)
+        # Add the appropriate links
+        self.add_pagination_links(response)
+
+        return response
 
 
 class SignatureValidationAPIViewMixin(object):
