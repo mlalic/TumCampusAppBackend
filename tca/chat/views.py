@@ -26,6 +26,7 @@ from chat.models import PublicKeyConfirmation
 from chat.serializers import MemberSerializer
 from chat.serializers import ChatRoomSerializer
 from chat.serializers import MessageSerializer
+from chat.serializers import ListMessageSerializer
 from chat.serializers import PublicKeySerializer
 
 from chat import hooks
@@ -141,6 +142,39 @@ class MemberBasedSignatureValidationMixin(SignatureValidationAPIViewMixin):
             pubkey.key_text
             for pubkey in self.member.public_keys.filter(active=True)
         ]
+
+
+class MultiSerializerViewSetMixin(object):
+    """
+    Mixin for the DRF ViewSet providing the ability to choose a different
+    serializer based on the view action.
+
+    Classes mixing it in need to provide the ``serializer_classes``
+    dictionary mapping an action to a serializer class.
+
+    If a particular action does not have a custom serializer attached to it,
+    the mixin delegates the call up the MRO (Method Resolution Order).
+
+    Example usage::
+
+        from rest_framework import viewsets
+
+
+        class ModelViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
+            model = SomeModel
+            #: Provide a default model serializer like usual
+            serializer_class = DefaultModelSerializer
+            #: Provide an overide for the serializer for two actions
+            serializer_classes = {
+                'list': ListModelSerializer,
+                'create': CreateModelSerializer,
+            }
+    """
+    def get_serializer_class(self):
+        if self.action in self.serializer_classes:
+            return self.serializer_classes[self.action]
+
+        return super(MultiSerializerViewSetMixin, self).get_serializer_class()
 
 
 class MemberViewSet(FilteredModelViewSetMixin, viewsets.ModelViewSet):
@@ -322,10 +356,17 @@ class ChatRoomViewSet(
         }, status=status_code)
 
 
-class ChatMessageViewSet(viewsets.ModelViewSet):
+class ChatMessageViewSet(MultiSerializerViewSetMixin, viewsets.ModelViewSet):
     model = Message
     chat_room_id_field = 'chat_room'
+
+    #: The default serializer to be used for the ViewSet
     serializer_class = MessageSerializer
+    #: A dictionary of serializers to override the default one depending
+    #: on the action being taken.
+    serializer_classes = {
+        'list': ListMessageSerializer,
+    }
 
     def _chat_room_instance(self):
         """Returns the :class:`models.ChatRoom` instance that is the parent

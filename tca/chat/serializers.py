@@ -69,19 +69,17 @@ class ChatRoomSerializer(serializers.HyperlinkedModelSerializer):
         model = ChatRoom
 
 
-class MessageSerializer(serializers.HyperlinkedModelSerializer):
-    url = serializers.SerializerMethodField('get_url')
+class MessageSerializerMixin(object):
+    """
+    A mixin for serializers wishing to serialize the
+    :class:`chat.models.Message` models.
 
-    read_only_fields = ('valid',)
+    It provides the default ``Meta`` settings for the objects, as well
+    as a convenience method for obtaining the URL of a message.
 
-    def __init__(self, *args, **kwargs):
-        """
-        Override the init method to set some fields as read only.
-        """
-        super(MessageSerializer, self).__init__(*args, **kwargs)
-        for field_name in self.read_only_fields:
-            self.fields[field_name].read_only = True
-
+    Classes mixing it in need to override any field they want to
+    deviate from their base serializer's implementation.
+    """
     def get_url(self, message):
         """Customized version of obtaining the object's URL.
         Necessary because the resource is a subordinate of a chatroom
@@ -99,3 +97,25 @@ class MessageSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Message
         exclude = ('chat_room',)
+        read_only_fields = ('valid',)
+
+
+class MessageSerializer(MessageSerializerMixin, serializers.HyperlinkedModelSerializer):
+    """
+    A serializer for the :class:`chat.models.Message` model.
+
+    Treats the :class:`chat.models.Member` instance associated to the
+    message as a hyperlink.  It is suitable for creating new messages.
+    """
+    url = serializers.SerializerMethodField('get_url')
+
+
+class ListMessageSerializer(MessageSerializerMixin, serializers.ModelSerializer):
+    """
+    A serializer for the :class:`chat.models.Message` model.
+
+    Treats the :class:`chat.models.Member` instance associated to the
+    message as a nested resource.  It is suitable for listing messages.
+    """
+    url = serializers.SerializerMethodField('get_url')
+    member = MemberSerializer()
