@@ -4,5 +4,7 @@ python:
 install:
   # Build/test dependencies
   - pip install -r tca/requirements.txt --use-mirrors
+  # The coverage tool
+  - pip install coverage --use-mirrors
 script:
-  - python tca/manage.py test tca/
+  - coverage run --source='tca/.' tca/manage.py test tca/ && coverage report --fail-under=95
