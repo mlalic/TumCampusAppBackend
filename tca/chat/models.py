@@ -24,6 +24,9 @@ class Member(models.Model):
     registration_ids = JSONField(default=())
 
     def __str__(self):
+        if self.display_name.strip():
+            return self.display_name.strip()
+
         return self.lrz_id
 
     def get_absolute_url(self):
