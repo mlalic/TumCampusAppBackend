@@ -90,6 +90,7 @@ class GcmNotifierTestCase(TestCase):
         self.assertEquals(data['text'], message.text)
         self.assertEquals(data['valid'], message.valid)
         self.assertEquals(data['signature'], message.signature)
+        self.assertEquals(data['chat_room']['id'], message.chat_room.pk)
 
     def test_notification_sent(self, gcm_mock):
         """

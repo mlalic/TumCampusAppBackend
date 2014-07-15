@@ -69,6 +69,21 @@ class ChatRoomSerializer(serializers.HyperlinkedModelSerializer):
         model = ChatRoom
 
 
+class PartialChatRoomSerializer(serializers.ModelSerializer):
+    """
+    A serializer for the :class:`chat.models.ChatRoom` model which
+    includes only a partial representation of the resource.
+
+    Useful when we want to reduce the amount of data transferred over
+    the network and only most important information about the resource
+    is required.
+    """
+    class Meta:
+        model = ChatRoom
+        # Include only the ID of the chat room
+        fields = ('id',)
+
+
 class MessageSerializerMixin(object):
     """
     A mixin for serializers wishing to serialize the
@@ -124,3 +139,4 @@ class ListMessageSerializer(MessageSerializerMixin, serializers.ModelSerializer)
     """
     url = serializers.SerializerMethodField('get_url')
     member = MemberSerializer()
+    chat_room = PartialChatRoomSerializer()

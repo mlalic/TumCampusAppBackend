@@ -413,6 +413,9 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
             self.assertTrue(response_message['url'].endswith(
                 message.get_absolute_url()))
             self.assertEquals(message.valid, response_message['valid'])
+            self.assertIn('chat_room', response_message)
+            self.assertEquals(
+                message.chat_room.pk, response_message['chat_room']['id'])
             nested_member = response_message['member']
             self.assertIn('url', nested_member)
             self.assertTrue(nested_member['url'].endswith(
