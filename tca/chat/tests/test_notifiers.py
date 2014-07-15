@@ -78,6 +78,7 @@ class GcmNotifierTestCase(TestCase):
             'member',
             'valid',
             'signature',
+            'chat_room',
             'id',
         )
         self.assertEquals(len(fields), len(data.items()))

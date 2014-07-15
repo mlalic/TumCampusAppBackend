@@ -96,8 +96,13 @@ class MessageSerializerMixin(object):
 
     class Meta:
         model = Message
-        exclude = ('chat_room',)
-        read_only_fields = ('valid',)
+        read_only_fields = (
+            'valid',
+        )
+
+    def __init__(self, *args, **kwargs):
+        super(MessageSerializerMixin, self).__init__(*args, **kwargs)
+        self.fields['chat_room'].read_only = True
 
 
 class MessageSerializer(MessageSerializerMixin, serializers.HyperlinkedModelSerializer):

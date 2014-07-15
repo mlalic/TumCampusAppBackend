@@ -356,6 +356,27 @@ class MessageListTestCase(ViewTestCaseMixin, TestCase):
         message = Message.objects.all()[0]
         self.assertFalse(message.valid)
 
+    @mock.patch('chat.views.hooks.validate_message_signature')
+    def test_create_message_chat_room_override(
+            self, mock_validate_signature):
+        """
+        Test that when a new message is created through the REST endpoint,
+        the chat_room field cannot be overridden.
+        """
+        new_message_dict = self._build_message_json(
+            text='message text...',
+            member=self.member)
+        new_chat_room = ChatRoomFactory.create()
+        new_message_dict['chat_room'] = new_chat_room.pk
+
+        response = self.post_json(
+                new_message_dict,
+                chat_room=self.chat_room.pk)
+
+        self.assertEquals(1, Message.objects.count())
+        message = Message.objects.all()[0]
+        self.assertEquals(self.chat_room.pk, message.chat_room.pk)
+
     def test_list_messages(self):
         """
         Tests that it is possible to list all existing messages of a chat
