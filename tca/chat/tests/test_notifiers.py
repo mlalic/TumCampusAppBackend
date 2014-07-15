@@ -92,6 +92,45 @@ class GcmNotifierTestCase(TestCase):
         self.assertEquals(data['signature'], message.signature)
         self.assertEquals(data['chat_room']['id'], message.chat_room.pk)
 
+    def test_notification_duplicate_registration_id(self, gcm_mock):
+        """
+        Tests that a notification is sent only once for each unique
+        registration ID, disregarding possible duplicates.
+        """
+        self.set_up_notifier()
+        # Join a part of the members to the chat room
+        # - the sender has got to be a part of it
+        self.target_chat_room.members.add(self.sender)
+        # Add one receiver to the chat room
+        self.target_chat_room.members.add(self.members[0])
+        # Make the receiver have a duplicate registration ID
+        self.members[0].registration_ids.append(
+            self.members[0].registration_ids[0])
+        self.members[0].save()
+        # Set up a message in the chat room
+        message = MessageFactory.create(
+            chat_room=self.target_chat_room,
+            member=self.sender)
+
+        self.notifier.notify(message)
+
+        gcm_mock_instance = gcm_mock()
+        self.assertTrue(gcm_mock_instance.json_request.called)
+        # Check the parameters of the call
+        args, kwargs = gcm_mock_instance.json_request.call_args
+        # No positional arguments
+        self.assertEquals(0, len(args))
+        # Exactly 2 kwargs
+        self.assertEqual(2, len(kwargs.items()))
+        self.assertIn('registration_ids', kwargs)
+        self.assertIn('data', kwargs)
+        # Correct values for them?
+        # - registration IDs
+        expected_ids = list(set(self.members[0].registration_ids))
+        self.assertItemsEqual(expected_ids, kwargs['registration_ids'])
+        # - data
+        self.assert_data_correct(kwargs['data'], message)
+
     def test_notification_sent(self, gcm_mock):
         """
         Tests that the notification is correctly sent to all members of
@@ -124,7 +163,7 @@ class GcmNotifierTestCase(TestCase):
         # Correct values for them?
         # - registration IDs
         expected_ids = self.get_registration_ids(self.members[:3])
-        self.assertListEqual(expected_ids, kwargs['registration_ids'])
+        self.assertItemsEqual(expected_ids, kwargs['registration_ids'])
         # - data
         self.assert_data_correct(kwargs['data'], message)
 

@@ -125,11 +125,11 @@ class GcmNotifier(BaseNotifier):
         members = message.chat_room.members.exclude(pk=message.member.pk)
 
         # Batch all of their registration_ids
-        registration_ids = []
+        registration_ids = set()
         for member in members:
-            registration_ids.extend(member.registration_ids)
+            registration_ids.update(member.registration_ids)
 
-        return registration_ids
+        return list(registration_ids)
 
     def _message_to_data(self, message):
         """
