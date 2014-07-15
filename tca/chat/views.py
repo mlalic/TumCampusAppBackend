@@ -90,7 +90,7 @@ class PaginatedListModelMixin(object):
     links are included in the HTTP ``Link`` header instead of enveloping
     the results of the endpoint in a JSON object with a "results" field.
     """
-    default_page_size = 5
+    default_page_size = 10
     page_size_parameter = 'page_size'
     paging_parameter = 'page'
     paginator_class = Paginator
