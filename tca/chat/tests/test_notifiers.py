@@ -78,12 +78,14 @@ class GcmNotifierTestCase(TestCase):
             'member',
             'valid',
             'signature',
+            'id',
         )
         self.assertEquals(len(fields), len(data.items()))
 
         self.assertTrue(data['url'].endswith(message.get_absolute_url()))
-        self.assertTrue(data['member'].endswith(
+        self.assertTrue(data['member']['url'].endswith(
             message.member.get_absolute_url()))
+        self.assertEquals(data['member']['lrz_id'], message.member.lrz_id)
         self.assertEquals(data['text'], message.text)
         self.assertEquals(data['valid'], message.valid)
         self.assertEquals(data['signature'], message.signature)

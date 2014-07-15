@@ -10,7 +10,7 @@ import json
 
 from rest_framework.renderers import JSONRenderer
 
-from chat.serializers import MessageSerializer
+from chat.serializers import ListMessageSerializer
 
 
 class NotifierMeta(type):
@@ -138,7 +138,7 @@ class GcmNotifier(BaseNotifier):
         """
         # Leverage the MessageSerializer to get the serialized representation
         # of a Message
-        serializer = MessageSerializer(message)
+        serializer = ListMessageSerializer(message)
 
         json_message = JSONRenderer().render(serializer.data)
 
