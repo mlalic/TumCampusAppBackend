@@ -102,3 +102,7 @@ TCA_FROM_EMAIL = 'noreply@tca'
 
 #: Whether the send emails to confirm the validity of users' public keys
 TCA_ENABLE_EMAIL_CONFIRMATIONS = True
+
+#: The number of days after which chat messages become stale and are
+#: cleaned up from the server
+TCA_MESSAGE_EXPIRATION_DAYS = 7
