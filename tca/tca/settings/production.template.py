@@ -16,6 +16,9 @@ DEBUG = False
 #: Make sure to provide a real celery broker
 # BROKER_URL = 'amqp://guest:guest@localhost//'
 
+#: Directory which collects all static files
+# STATIC_ROOT = ''
+
 #: Make sure that GCM notifications are enabled
 TCA_ENABLE_GCM_NOTIFICATIONS = True
 

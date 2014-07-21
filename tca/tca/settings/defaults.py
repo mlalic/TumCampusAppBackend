@@ -96,13 +96,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 #: expire.
 TCA_CONFIRMATION_EXPIRATION_HOURS = 1
 
-#: The email address to be used in the From field of emails sent by the
-#: TCA system.
-TCA_FROM_EMAIL = 'noreply@tca'
-
 #: Whether the send emails to confirm the validity of users' public keys
 TCA_ENABLE_EMAIL_CONFIRMATIONS = True
 
 #: The number of days after which chat messages become stale and are
 #: cleaned up from the server
 TCA_MESSAGE_EXPIRATION_DAYS = 7
+
+#: The domain name of the TCA deployment.  Must be overridden in the
+#: production settings!
+TCA_DOMAIN_NAME = 'localhost:8888'
