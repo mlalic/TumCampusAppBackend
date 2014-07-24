@@ -13,3 +13,6 @@ except ImportError:
 # do not override it with the calculated value.
 if 'TCA_FROM_EMAIL' not in globals():
     TCA_FROM_EMAIL = 'noreply@' + TCA_DOMAIN_NAME
+
+#: Automatically make the TCA_DOMAIN_NAME allowed
+ALLOWED_HOSTS += [TCA_DOMAIN_NAME]

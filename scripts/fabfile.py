@@ -27,7 +27,6 @@ env.conf = {
         'TCA_DOMAIN_NAME': '"ec2-54-74-61-201.eu-west-1.compute.amazonaws.com"',
         'TCA_SCHEME': '"http"',
         'TCA_GCM_API_KEY': '"PUT_THE_ACTUAL_KEY_HERE!!!"',
-        'ALLOWED_HOSTS': '[TCA_DOMAIN_NAME]',
         'STATIC_ROOT': '"/home/ubuntu/deployments/static"',
     },
 }
