@@ -13,6 +13,28 @@ a symlink to it from a ``local_settings.py`` file, i.e.::
 #: DEBUG should never be set to True in production
 DEBUG = False
 
+#: Set the database settings here.
+DATABASES = {
+    'default': {
+        # Use 'django.db.backends.mysql' for a MySQL database
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        # Name of the database
+        'NAME': 'tca',
+        # User under which the TCA Backend Accesses the database
+        'USER': 'tca',
+        # **** Make sure to set the database password here!!! ****
+        'PASSWORD': 'tca',
+        # ---
+        # These parameters shouldn't need changing with default database
+        # configs.
+        # The host at which the database server can be reached
+        'HOST': 'localhost',
+        # The port under which the database server can be reached
+        'PORT': '',
+    }
+}
+
+
 #: Make sure to provide a real celery broker
 # BROKER_URL = 'amqp://guest:guest@localhost//'
 

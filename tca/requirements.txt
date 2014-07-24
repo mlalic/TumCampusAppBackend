@@ -9,6 +9,7 @@ factory-boy==2.3.1
 jsonfield==0.9.20
 kombu==3.0.19
 mock==1.0.1
+psycopg2==2.5.3
 pycrypto==2.6.1
 pytz==2014.4
 python-gcm==0.1.5

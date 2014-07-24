@@ -15,7 +15,12 @@ else
 fi
 
 apt-get update
-apt-get -y install python-pip python-all-dev python-all-dbg rabbitmq-server nginx supervisor postgresql libpq-dev git
+apt-get -y install python-pip python-all-dev python-all-dbg rabbitmq-server supervisor git
+apt-get -y install nginx
+apt-get install -y postgresql postgresql-contrib libpq-dev
+# In order to install MySQL (and the required dependency for building the
+# Python connector), uncomment the following line
+# apt-get -y install mysql-server libmysqlclient-dev
 
 # Python packages
 pip install virtualenv virtualenvwrapper
